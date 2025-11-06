@@ -137,7 +137,7 @@ function updateChart(rawData) {
     const columnLabels = ['1940s-50s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s'];
     const xScale = d3.scaleBand()
         .domain(columnNames)
-        .range([0, width])
+        .range([0, dimensions.width])
         .paddingInner(0.1);
 
     const yScale = d3.scaleBand()
@@ -161,10 +161,10 @@ function updateChart(rawData) {
 
     // Render the Visualization
     const svg = d3.select(".chart-container").append("svg")
-        .attr("width", outerWidth)
-        .attr("height", outerHeight)
+        .attr("width", dimensions.width + dimensions.margin.left + dimensions.margin.right)
+        .attr("height", dimensions.height + dimensions.margin.top + dimensions.margin.bottom)
         .append("g")
-        .attr("transform", `translate(${margin.left}, ${margin.top})`);
+        .attr("transform", `translate(${dimensions.margin.left}, ${dimensions.margin.top})`);
 
     // Draw Marks
     svg.selectAll("circle")
@@ -183,7 +183,7 @@ function updateChart(rawData) {
     const xAxisGroup = svg.append("g")
         .attr("class", "x-axis")
         //Move the x-axis downwards (for some reason it shows up way too high without this)
-        .attr("transform", `translate(0, ${-margin.top + 820})`) 
+        .attr("transform", `translate(0, ${-dimensions.margin.top + 820})`) 
         .call(d3.axisTop(xScale)
             .tickSize(height)
             .tickFormat((d, i) => columnLabels[i]));
@@ -196,7 +196,7 @@ function updateChart(rawData) {
     svg.append("g")
         .attr("class", "y-axis")
         .call(d3.axisLeft(yScale)
-            .tickSize(-width)) 
+            .tickSize(-dimensions.width)) 
         .selectAll(".tick line")
         .attr("stroke", "#ccc")
         .attr("stroke-dasharray", "2,2"); 
@@ -214,7 +214,7 @@ function updateChart(rawData) {
     // --- LEGEND ---
     const legend = svg.append("g")
         .attr("class", "legend")
-        .attr("transform", `translate(${width - 250}, ${-margin.top + 25})`); 
+        .attr("transform", `translate(${dimensions.width - 250}, ${-dimensions.margin.top + 25})`); 
 
     legend.append("text")
         .attr("y", -10)
