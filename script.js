@@ -1,9 +1,11 @@
 // --- Data Loading and Initialization ---
-    var dimensions = {
+    const dimensions = {
         width: 1900,
         height: 800,
         margin: { top: 30, right: 20, bottom: 20, left: 50 }
     }
+    const width = dimensions.width - dimensions.margin.left - dimensions.margin.right;
+    const height = dimensions.height - dimensions.margin.top - dimensions.margin.bottom;
     const radius = 0.7; // Radius of each data mark
     const PARTY_OFFSET_AMOUNT = 0.15; // Controls how far off-center each party is pulled (0.0 to 0.5)
 
