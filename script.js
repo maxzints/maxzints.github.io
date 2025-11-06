@@ -1,6 +1,4 @@
 // --- Data Loading and Initialization ---
-d3.csv("ScrubbedRLSDataFile.csv").then(function (rawData) {
-
     var dimensions = {
         width: 1900,
         height: 800,
@@ -8,6 +6,8 @@ d3.csv("ScrubbedRLSDataFile.csv").then(function (rawData) {
     }
     const radius = 0.7; // Radius of each data mark
     const PARTY_OFFSET_AMOUNT = 0.15; // Controls how far off-center each party is pulled (0.0 to 0.5)
+
+d3.csv("ScrubbedRLSDataFile.csv").then(function (rawData) {
 
     window.rlsData = rawData; 
     
