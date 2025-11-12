@@ -9,6 +9,9 @@
     const radius = 0.7; // Radius of each data mark
     const PARTY_OFFSET_AMOUNT = 0.15; // Controls how far off-center each party is pulled (0.0 to 0.5)
 
+    // Cache processed/pivoted data per question to avoid repeated work
+    const processedCache = new Map();
+
 d3.csv("ScrubbedRLSDataFile.csv").then(function (rawData) {
 
     window.rlsData = rawData; 
@@ -121,8 +124,9 @@ function processAndPivotData(rawData, questionId, xScale, yScale) {
 
 // Chart Update Function when button is pressed
 function updateChart(rawData) {
-    // Clear old SVG content
+    // Clear old SVG and Canvas content
     d3.select(".chart-container svg").remove();
+    d3.select(".chart-container canvas").remove();
 
     // Labels for each axis
     const rowNames = ["Better", "No Difference", "Worse"];
@@ -147,76 +151,114 @@ function updateChart(rawData) {
         .range([0, height])
         .paddingInner(0.1);
 
-    // Process data
-    let filteredAndPivotedData = processAndPivotData(rawData, currentQuestionColumn, xScale, yScale);
-
-    // Define and Run the Force Simulation
-    const simulation = d3.forceSimulation(filteredAndPivotedData)
-        .force('x', d3.forceX(d => d.targetX).strength(0.15))
-        .force('y', d3.forceY(d => d.targetY).strength(0.15))
-        .force('collide', d3.forceCollide(radius * 2 + 0.25)); 
-
-    simulation.stop();
-    for (let i = 0; i < 150; ++i) { 
-        simulation.tick();
+    // Process data (with caching) — positions are in pixel space relative to scales
+    let nodes;
+    if (processedCache.has(currentQuestionColumn)) {
+        nodes = processedCache.get(currentQuestionColumn);
+    } else {
+        nodes = processAndPivotData(rawData, currentQuestionColumn, xScale, yScale);
+        processedCache.set(currentQuestionColumn, nodes);
     }
 
-    // Render the Visualization
+    // Create a canvas for fast rendering of many points (SVG with 36k nodes is slow)
+    const canvas = d3.select('.chart-container')
+        .append('canvas')
+        .attr('width', dimensions.width + dimensions.margin.left + dimensions.margin.right)
+        .attr('height', dimensions.height + dimensions.margin.top + dimensions.margin.bottom)
+        .style('position', 'absolute')
+        .style('left', '0px')
+        .style('top', '0px')
+        .node();
+
+    const ctx = canvas.getContext('2d');
+
+    // Define and run the force simulation asynchronously (non-blocking)
+    const simulation = d3.forceSimulation(nodes)
+        .force('x', d3.forceX(d => d.targetX).strength(0.2))
+        .force('y', d3.forceY(d => d.targetY).strength(0.2))
+        .force('collide', d3.forceCollide(radius * 2 + 0.25))
+        .alpha(1)
+        .alphaDecay(0.03);
+
+    // draw function using canvas
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        // account for the svg group translation used for axes
+        ctx.translate(dimensions.margin.left, dimensions.margin.top);
+        for (let i = 0; i < nodes.length; i++) {
+            const d = nodes[i];
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = colorScale(d.partyName);
+            ctx.globalAlpha = 0.9;
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    // redraw each tick but throttle via requestAnimationFrame
+    let scheduled = false;
+    simulation.on('tick', () => {
+        if (!scheduled) {
+            scheduled = true;
+            requestAnimationFrame(() => {
+                draw();
+                scheduled = false;
+            });
+        }
+    });
+
+    // ensure final draw after simulation ends
+    simulation.on('end', draw);
+
+    // initial draw for immediate feedback (positions initially equal target positions)
+    draw();
+        
+    // --- AXES ---
+
+    // X-Axis (Birthdecade labels and grid lines)
     const svg = d3.select(".chart-container").append("svg")
         .attr("width", dimensions.width + dimensions.margin.left + dimensions.margin.right)
         .attr("height", dimensions.height + dimensions.margin.top + dimensions.margin.bottom)
         .append("g")
         .attr("transform", `translate(${dimensions.margin.left}, ${dimensions.margin.top})`);
 
-    // Draw Marks
-    svg.selectAll("circle")
-        .data(filteredAndPivotedData)
-        .enter()
-        .append("circle")
-        .attr("r", radius)
-        .attr("cx", d => d.x)
-        .attr("cy", d => d.y)
-        .attr("fill", d => colorScale(d.partyName)) 
-        .attr("opacity", 0.9);
-        
-    // --- AXES ---
-
-    // X-Axis (Birthdecade labels and grid lines)
     const xAxisGroup = svg.append("g")
         .attr("class", "x-axis")
-        //Move the x-axis downwards (for some reason it shows up way too high without this)
-        .attr("transform", `translate(0, ${-dimensions.margin.top + 820})`) 
+        // Move the x-axis downwards to align with the canvas drawing area
+        .attr("transform", `translate(0, ${-dimensions.margin.top + 820})`)
         .call(d3.axisTop(xScale)
             .tickSize(height)
             .tickFormat((d, i) => columnLabels[i]));
-            
+
     xAxisGroup.selectAll(".tick line")
         .attr("stroke", "#ccc")
-        .attr("stroke-dasharray", "2,2"); 
-    
+        .attr("stroke-dasharray", "2,2");
+
     // Y-Axis (Response Labels and grid lines)
     svg.append("g")
         .attr("class", "y-axis")
         .call(d3.axisLeft(yScale)
-            .tickSize(-dimensions.width)) 
+            .tickSize(-dimensions.width))
         .selectAll(".tick line")
         .attr("stroke", "#ccc")
-        .attr("stroke-dasharray", "2,2"); 
-    
+        .attr("stroke-dasharray", "2,2");
+
     // Y-Axis Label Rotation
     svg.select(".y-axis")
         .selectAll("text")
-        .attr("x", -12) 
+        .attr("x", -12)
         .attr("y", -8)
-        .attr("transform", "rotate(-65)") 
-        .style("text-anchor", "middle"); 
+        .attr("transform", "rotate(-65)")
+        .style("text-anchor", "middle");
 
     svg.selectAll(".domain").attr("stroke", "none");
 
     // --- LEGEND ---
     const legend = svg.append("g")
         .attr("class", "legend")
-        .attr("transform", `translate(${dimensions.width - 250}, ${-dimensions.margin.top + 25})`); 
+        .attr("transform", `translate(${dimensions.width - 250}, ${-dimensions.margin.top + 25})`);
 
     legend.append("text")
         .attr("y", -10)
