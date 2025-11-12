@@ -46,10 +46,37 @@
             color: white;
             border-color: #007bff;
         }
+        /* Nav buttons linking to standalone visuals */
+        .nav-buttons {
+            text-align: center;
+            margin: 14px 0;
+        }
+        .nav-buttons .nav-button {
+            display: inline-block;
+            padding: 8px 12px;
+            margin: 0 6px;
+            background: #28a745;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            border: 1px solid #208038;
+        }
+        .nav-buttons .nav-button.sankey {
+            background: #17a2b8;
+            border-color: #12808a;
+        }
+        .nav-buttons .nav-button:hover {
+            opacity: 0.9;
+        }
     </style>
     <script src="https://d3js.org/d3.v7.min.js"></script> 
 </head>
 <body>
+    <div class="nav-buttons">
+        <a class="nav-button" href="circle.html">Circle</a>
+        <a class="nav-button sankey" href="sankey.html">Sankey</a>
+    </div>
     <div class="buttons-container"></div>
     <div class="chart-container"></div>
 
