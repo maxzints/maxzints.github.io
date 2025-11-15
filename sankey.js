@@ -8,7 +8,10 @@ function renderSankey(containerSelector = '#chart') {
     return;
   }
   container.html('');
-  const width = 1000, height = 700;
+  // derive size from container so the sankey fills its container
+  const rect = container.node().getBoundingClientRect();
+  const width = Math.max(300, Math.floor(rect.width));
+  const height = Math.max(200, Math.floor(rect.height));
   const svg = container.append('svg').attr('width', width).attr('height', height);
 
   function mapParty(code) { switch (+code) { case 1: return 'Republican'; case 2: return 'Democrat'; case 3: return 'Independent'; default: return 'Other'; } }
@@ -29,8 +32,11 @@ function renderSankey(containerSelector = '#chart') {
     console.log('sankey: loaded CSV rows =', data.length);
     if (typeof d3.sankey !== 'function' || typeof d3.sankeyLinkHorizontal !== 'function') {
       const msg = 'd3-sankey is not available. Make sure the d3-sankey script is included before sankey.js';
-      console.error(msg);
-      d3.select('#sankey-error').text(msg);
+        console.error(msg);
+        // show error inside the container (create a visible error area if needed)
+        let errEl = container.select('.sankey-error');
+        if (errEl.empty()) errEl = container.append('div').attr('class','sankey-error').style('color','crimson');
+        errEl.text(msg);
       return;
     }
     // Aggregate directly from Party -> Income (drop Race stage)
@@ -123,18 +129,12 @@ function renderSankey(containerSelector = '#chart') {
       .text(d => d.name)
       .style('font-size', '12px');
 
-  }).catch(err => {
+    }).catch(err => {
     console.error('sankey: failed to load CSV', err);
-    d3.select('#sankey-error').text('Failed to load data. Check console.');
+    let errEl = container.select('.sankey-error');
+    if (errEl.empty()) errEl = container.append('div').attr('class','sankey-error').style('color','crimson');
+    errEl.text('Failed to load data. Check console.');
   });
 }
 
-// If loaded in a page directly, auto-run against #chart
-if (typeof window !== 'undefined') {
-  // Wait for DOM content to ensure #chart exists when included directly
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => renderSankey('#chart'));
-  } else {
-    renderSankey('#chart');
-  }
-}
+// Do not auto-run. Call renderSankey('#chart-sankey') or similar from the host page.

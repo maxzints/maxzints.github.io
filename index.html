@@ -22,30 +22,7 @@
             position: relative;
             margin: 20px;
         }
-        .buttons-container {
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        /* Button styles */
-        .buttons-container button {
-            padding: 10px 15px;
-            margin: 0 5px;
-            border: 1px solid #ccc;
-            background-color: #f0f0f0;
-            cursor: pointer;
-            font-size: 14px;
-            border-radius: 5px;
-            transition: background-color 0.2s ease, border-color 0.2s ease;
-        }
-        .buttons-container button:hover {
-            background-color: #e0e0e0;
-            border-color: #aaa;
-        }
-        .buttons-container button.active {
-            background-color: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
+
         /* Nav buttons linking to standalone visuals */
         .nav-buttons {
             text-align: center;
@@ -73,13 +50,41 @@
     <script src="https://d3js.org/d3.v7.min.js"></script> 
 </head>
 <body>
-    <div class="nav-buttons">
-        <a class="nav-button" href="circle.html">Circle</a>
-        <a class="nav-button sankey" href="sankey.html">Sankey</a>
-    </div>
-    <div class="buttons-container"></div>
-    <div class="chart-container"></div>
+            <style>
+                /* Full viewport dashboard with a top large visual and a bottom row split */
+                html, body { height: 100%; }
+                body { display:flex; flex-direction:column; min-height:100vh; }
+                .dashboard { display:flex; flex-direction:column; height:100vh; gap:12px; padding:12px; box-sizing:border-box; }
+                .dash-top { flex: 0 0 62%; }
+                .dash-bottom { flex: 1 1 38%; display:flex; gap:12px; }
+                .chart-item { background: #fff; border-radius:6px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); overflow:hidden; }
+                /* top force plot takes most of width */
+                #chart-vis1 { width: 100%; height: 100%; }
+                /* bottom: sankey wider, circle narrower */
+                #chart-sankey { flex: 2; height: 100%; }
+                #chart-circle { flex: 1; height: 100%; display:flex; align-items:center; justify-content:center; }
+                /* ensure inner SVG/canvas can fill their containers */
+                #chart-vis1 svg, #chart-vis1 canvas, #chart-sankey svg, #chart-sankey canvas, #chart-circle svg, #chart-circle canvas { width:100%; height:100%; display:block; }
+            </style>
 
-    <script src="Vis1.js"></script>
+            <div class="dashboard">
+                <div class="dash-top chart-item">
+                    <div id="chart-vis1" class="chart-container"></div>
+                </div>
+                <div class="dash-bottom">
+                    <div id="chart-sankey" class="chart-item"></div>
+                    <div id="chart-circle" class="chart-item"></div>
+                </div>
+            </div>
+
+            <script src="Vis1.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+            <script src="sankey.js"></script>
+            <script src="circle.js"></script>
+            <script>
+                // Render the sankey and circle into their containers. Vis1 will render into #chart-vis1.
+                try { renderSankey('#chart-sankey'); } catch (e) { console.error('Failed to render sankey', e); }
+                try { renderCircle('#chart-circle'); } catch (e) { console.error('Failed to render circle', e); }
+            </script>
 </body>
 </html>
