@@ -1,17 +1,19 @@
 // sankey.js — Sankey: Party -> Race -> Income (D3)
 // Exposes renderSankey(containerSelector) function.
 
-function renderSankey(containerSelector = '#chart') {
+function renderSankey(containerSelector = '#chart-sankey') {
   const container = d3.select(containerSelector);
   if (container.empty()) {
     console.warn('renderSankey: container not found:', containerSelector);
     return;
   }
   container.html('');
-  // derive size from container so the sankey fills its container
   const rect = container.node().getBoundingClientRect();
-  const width = Math.max(300, Math.floor(rect.width));
-  const height = Math.max(200, Math.floor(rect.height));
+  // Use 95% of the container width/height for the inner SVG, allowing for margins
+  const width = Math.max(500, rect.width * 0.95);
+  const height = Math.max(300, rect.height * 0.95);
+
+  
   const svg = container.append('svg').attr('width', width).attr('height', height);
 
   function mapParty(code) { switch (+code) { case 1: return 'Republican'; case 2: return 'Democrat'; case 3: return 'Independent'; default: return 'Other'; } }
@@ -32,11 +34,8 @@ function renderSankey(containerSelector = '#chart') {
     console.log('sankey: loaded CSV rows =', data.length);
     if (typeof d3.sankey !== 'function' || typeof d3.sankeyLinkHorizontal !== 'function') {
       const msg = 'd3-sankey is not available. Make sure the d3-sankey script is included before sankey.js';
-        console.error(msg);
-        // show error inside the container (create a visible error area if needed)
-        let errEl = container.select('.sankey-error');
-        if (errEl.empty()) errEl = container.append('div').attr('class','sankey-error').style('color','crimson');
-        errEl.text(msg);
+      console.error(msg);
+      d3.select('#sankey-error').text(msg);
       return;
     }
     // Aggregate directly from Party -> Income (drop Race stage)
@@ -84,8 +83,12 @@ function renderSankey(containerSelector = '#chart') {
       d3.select('#sankey-error').text('Failed to layout sankey: ' + err.message);
       return;
     }
+    const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
+    const partyDomains = ["Democrat", "Republican", "Independent", "Other"];  
 
-    const color = d3.scaleOrdinal(d3.schemeCategory10);
+    const color = d3.scaleOrdinal()
+      .domain(partyDomains) 
+      .range(partyColors); 
 
     svg.append('g')
       .attr('fill', 'none')
@@ -129,12 +132,18 @@ function renderSankey(containerSelector = '#chart') {
       .text(d => d.name)
       .style('font-size', '12px');
 
-    }).catch(err => {
+  }).catch(err => {
     console.error('sankey: failed to load CSV', err);
-    let errEl = container.select('.sankey-error');
-    if (errEl.empty()) errEl = container.append('div').attr('class','sankey-error').style('color','crimson');
-    errEl.text('Failed to load data. Check console.');
+    d3.select('#sankey-error').text('Failed to load data. Check console.');
   });
 }
 
-// Do not auto-run. Call renderSankey('#chart-sankey') or similar from the host page.
+// If loaded in a page directly, auto-run against #chart
+if (typeof window !== 'undefined') {
+  // Wait for DOM content to ensure #chart exists when included directly
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => renderSankey('#chart-sankey'));
+  } else {
+    renderSankey('#chart-sankey');
+  }
+}

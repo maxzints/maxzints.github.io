@@ -1,18 +1,18 @@
 // --- Data Loading and Initialization ---
     const dimensions = {
-        width: 1000,
-        height: 500,
+        width: 2000,
+        height: 600,
         margin: { top: 25, right: 20, bottom: 30, left: 30 }
     }
     const width = dimensions.width - dimensions.margin.left - dimensions.margin.right;
     const height = dimensions.height - dimensions.margin.top - dimensions.margin.bottom;
-    const radius = 0.5; // Radius of each data mark
+    const radius = 1; // Radius of each data mark
     const PARTY_OFFSET_AMOUNT = 0.25; // Controls how far off-center each party is pulled (0.0 to 0.5)
 
     // Cache processed/pivoted data per question to avoid repeated work
     const processedCache = new Map();
 
-d3.csv("ScrubbedRLSDataFile.csv").then(function (rawData) {
+d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
 
     window.rlsData = rawData; 
     updateChart(window.rlsData);
@@ -23,9 +23,7 @@ d3.csv("ScrubbedRLSDataFile.csv").then(function (rawData) {
 const questionColumns = [
     { id: "CHNG_A", label: "Societal Change A" },
     { id: "CHNG_B", label: "Societal Change B" },
-    { id: "CHNG_C", label: "Societal Change C" },
-    { id: "DIVRELPOP", label: "Diversity (Religion)" },
-    { id: "DIVRACPOP", label: "Diversity (Race)" }
+    { id: "CHNG_C", label: "Societal Change C" }
 ];
 const Party_ID = "PARTY";       
 
@@ -52,10 +50,10 @@ function mapResponseCodeToLabel(code) {
 //Offset each party such that they have their own quadrant of the a grid cell
 function getPartyOffset(partyName) {
     switch (partyName) {
-        case "Republican": return { dx: -PARTY_OFFSET_AMOUNT, dy: -PARTY_OFFSET_AMOUNT }; 
-        case "Democrat": return { dx: PARTY_OFFSET_AMOUNT, dy: PARTY_OFFSET_AMOUNT }; 
-        case "Independent": return { dx: PARTY_OFFSET_AMOUNT, dy: -PARTY_OFFSET_AMOUNT }; 
-        case "Other": return { dx: -PARTY_OFFSET_AMOUNT, dy: PARTY_OFFSET_AMOUNT }; 
+        case "Republican": return { dx: -PARTY_OFFSET_AMOUNT/1.2, dy: -PARTY_OFFSET_AMOUNT }; 
+        case "Democrat": return { dx: PARTY_OFFSET_AMOUNT/1.2, dy: PARTY_OFFSET_AMOUNT }; 
+        case "Independent": return { dx: PARTY_OFFSET_AMOUNT/1.2, dy: -PARTY_OFFSET_AMOUNT }; 
+        case "Other": return { dx: -PARTY_OFFSET_AMOUNT/1.2, dy: PARTY_OFFSET_AMOUNT }; 
         default: return { dx: 0, dy: 0 };
     }
 }
@@ -118,7 +116,7 @@ function updateChart(rawData) {
     // x-axis will be the question IDs
     
     const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
-    const partyColors = ["#1f77b4", "#d62728", "#ff7f0e", "#bcbd22"];
+    const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
 
     const colorScale = d3.scaleOrdinal()
         .domain(partyDomains)
@@ -131,15 +129,20 @@ function updateChart(rawData) {
     const chartWidth = Math.max(200, totalWidth - dimensions.margin.left - dimensions.margin.right);
     const chartHeight = Math.max(120, totalHeight - dimensions.margin.top - dimensions.margin.bottom);
 
+    // padding controls spacing between question bands and response rows
+    // Make question horizontal padding half of the vertical padding between response rows
+    const yPaddingInner = 0.025; // vertical gap between response bands
+    const xPadding = yPaddingInner / 4; // horizontal gap between question bands (half the vertical)
+
     const xScale = d3.scaleBand()
         .domain(questionColumns.map(q => q.id))
         .range([0, chartWidth])
-        .paddingInner(0.12);
+        .padding(xPadding);
 
     const yScale = d3.scaleBand()
         .domain(rowNames)
         .range([0, chartHeight])
-        .paddingInner(0.18);
+        .paddingInner(yPaddingInner);
 
     // Process data (with caching) — positions are in pixel space relative to scales
     const cacheKey = 'ALL_QUESTIONS';
@@ -165,11 +168,12 @@ function updateChart(rawData) {
 
     // Define and run the force simulation asynchronously (non-blocking)
     const simulation = d3.forceSimulation(nodes)
-        .force('x', d3.forceX(d => d.targetX).strength(0.25))
-        .force('y', d3.forceY(d => d.targetY).strength(0.25))
-        .force('collide', d3.forceCollide(radius * 2.5))
-        //.alpha(1)
-        //.alphaDecay(0.03);
+        .force('x', d3.forceX(d => d.targetX).strength(0.025))
+        .force('y', d3.forceY(d => d.targetY).strength(0.1))
+        .force('collide', d3.forceCollide(radius * 3))
+        .force('repel', d3.forceManyBody().strength(-0.01))
+        .alpha(1)
+        .alphaDecay(0.02);
 
     // draw function using canvas
     function draw() {
@@ -190,7 +194,35 @@ function updateChart(rawData) {
 
     // redraw each tick but throttle via requestAnimationFrame
     let scheduled = false;
+    // Constrain nodes to remain inside their response-label band (y-axis containers)
+    function constrainNodesToBands() {
+        // small padding so marks don't sit exactly on the band edge
+        const pad = 0.01;
+        for (let i = 0; i < nodes.length; i++) {
+            const d = nodes[i];
+            // vertical clamp to response band
+            const bandStart = yScale(d.responseLabel);
+            const bandEnd = bandStart + yScale.bandwidth();
+            const minY = bandStart + radius + pad;
+            const maxY = bandEnd - radius - pad;
+            if (d.y < minY) d.y = minY;
+            if (d.y > maxY) d.y = maxY;
+
+            // horizontal clamp to question column band
+            if (d.questionId) {
+                const colStart = xScale(d.questionId);
+                const colEnd = colStart + xScale.bandwidth();
+                const minX = colStart + radius + pad;
+                const maxX = colEnd - radius - pad;
+                if (d.x < minX) d.x = minX;
+                if (d.x > maxX) d.x = maxX;
+            }
+        }
+    }
+
     simulation.on('tick', () => {
+        // enforce band constraints before drawing so nodes never crossover bands
+        constrainNodesToBands();
         if (!scheduled) {
             scheduled = true;
             requestAnimationFrame(() => {
@@ -249,34 +281,34 @@ function updateChart(rawData) {
 
     svg.selectAll(".domain").attr("stroke", "none");
 
-    // --- LEGEND ---
-    const legend = svg.append("g")
-        .attr("class", "legend")
-        .attr("transform", `translate(${chartWidth}, ${-dimensions.margin.top + 25})`);
+    // // --- LEGEND ---
+    // const legend = svg.append("g")
+    //     .attr("class", "legend")
+    //     .attr("transform", `translate(${chartWidth}, ${-dimensions.margin.top + 25})`);
 
-    legend.append("text")
-        .attr("y", -10)
-        .attr("x", 0)
-        .style("font-weight", "bold")
-        .text("Party Names:");
+    // legend.append("text")
+    //     .attr("y", -10)
+    //     .attr("x", 0)
+    //     .style("font-weight", "bold")
+    //     .text("Party Names:");
 
-    const legendItems = legend.selectAll(".legend-item")
-        .data(partyDomains)
-        .enter()
-        .append("g")
-        .attr("class", "legend-item")
-        .attr("transform", (d, i) => `translate(0, ${i * 20})`);
+    // const legendItems = legend.selectAll(".legend-item")
+    //     .data(partyDomains)
+    //     .enter()
+    //     .append("g")
+    //     .attr("class", "legend-item")
+    //     .attr("transform", (d, i) => `translate(0, ${i * 20})`);
 
-    legendItems.append("circle")
-        .attr("cx", 5)
-        .attr("cy", 5)
-        .attr("r", 5)
-        .style("fill", d => colorScale(d));
+    // legendItems.append("circle")
+    //     .attr("cx", 5)
+    //     .attr("cy", 5)
+    //     .attr("r", 5)
+    //     .style("fill", d => colorScale(d));
 
-    legendItems.append("text")
-        .attr("x", 15)
-        .attr("y", 9)
-        .text(d => d);
+    // legendItems.append("text")
+    //     .attr("x", 15)
+    //     .attr("y", 9)
+    //     .text(d => d);
 
     // No buttons to update in this layout
 }

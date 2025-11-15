@@ -1,32 +1,28 @@
 // circle.js — Sunburst visualization for PARTY -> EDUCREC
 // Exposes renderCircle(containerSelector)
 
-function renderCircle(containerSelector = '#chart') {
+function renderCircle(containerSelector = '#chart-circle') {
   const container = d3.select(containerSelector);
   if (container.empty()) {
     console.warn('renderCircle: container not found:', containerSelector);
     return;
   }
   container.html('');
-
-  // size to container
   const rect = container.node().getBoundingClientRect();
-  const width = Math.max(240, Math.floor(rect.width));
-  const height = Math.max(240, Math.floor(rect.height));
-  const radius = Math.min(width, height) / 2;
+  // The sunburst is centered in a square space. Use the smaller dimension (height)
+  // of the bottom-half container to define the size to ensure it fits without scrolling.
+  const size = Math.min(rect.width * 0.95, rect.height * 0.95); 
+  const width = size;
+  const radius = size / 2;
+
   const svg = container.append('svg')
     .attr('width', width)
-    .attr('height', height)
+    .attr('height', width) // Keep it square
     .append('g')
-    .attr('transform', `translate(${width/2},${height/2})`);
+    .attr('transform', `translate(${width/2},${width/2})`); 
+  const tooltip = d3.select('#tooltip');
 
-  // Prefer a tooltip inside the container; if not present, create one on body
-  let tooltip = container.select('.tooltip');
-  if (tooltip.empty()) {
-    tooltip = d3.select('body').append('div').attr('class', 'tooltip').style('display', 'none');
-  }
-
-  function mapParty(code) { switch (+code) { case 1: return 'Republican'; case 2: return 'Democrat'; case 3: return 'Independent'; default: return 'Else'; } }
+  function mapParty(code) { switch (+code) { case 1: return 'Republican'; case 2: return 'Democrat'; case 3: return 'Independent'; default: return 'Other'; } }
   function mapEdu(code) { switch (+code) { case 1: return 'High School <'; case 2: return 'Associates <'; case 3: return 'Bachelor'; case 4: return 'Masters +'; default: return 'Unknown'; } }
 
   d3.csv('ScrubbedRLSDataFile.csv').then(data => {
@@ -54,9 +50,12 @@ function renderCircle(containerSelector = '#chart') {
       .innerRadius(d => d.y0)
       .outerRadius(d => d.y1 - 1);
 
+    const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
+    const partyDomains = ["Democrat", "Republican", "Independent", "Other"]; // <-- ADD THIS LINE
+
     const color = d3.scaleOrdinal()
-      .domain(rootNode.descendants().map(d => d.data.name))
-      .range(d3.schemeTableau10.concat(d3.schemeAccent));
+      .domain(partyDomains) 
+      .range(partyColors);
 
     const slices = svg.selectAll('path')
       .data(rootNode.descendants().filter(d => d.depth))
@@ -91,4 +90,11 @@ function renderCircle(containerSelector = '#chart') {
   });
 }
 
-// Do not auto-run when included. Call renderCircle('#chart-circle') or similar from the host page.
+// Auto-run when included directly
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => renderCircle('#chart-circle'));
+  } else {
+    renderCircle('#chart-circle');
+  }
+}
