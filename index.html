@@ -61,16 +61,12 @@
         .dash-bottom .chart-item:first-child { margin-left: 0; }
         .dash-bottom .chart-item:last-child { margin-right: 0; }
 
-
-        /* --- MODIFICATIONS FOR 75%/15%/10% SPLIT (Sankey/Circle/Legend) --- */
-
         /* Sankey Diagram (75% of bottom width) */
         #chart-sankey {
             flex: 15 1 0%; 
             margin-left: 0;
             margin-right: 20px; 
         }
-
         /* Circle Diagram (15% of bottom width) */
         #chart-circle {
             flex: 3 1 0%;
@@ -88,10 +84,6 @@
             margin-right: 0;
         }
 
-        /* --- END MODIFICATIONS FOR LAYOUT --- */
-
-        /* --- START MODIFICATIONS FOR LEGEND COLORS AND STYLE --- */
-
         /* Legend Specific Styles for better alignment (These make the colors visible) */
         .legend-item {
             display: flex; /* Aligns swatch and text horizontally */
@@ -106,9 +98,6 @@
             border-radius: 3px;
             border: 1px solid #ddd; /* A subtle border */
         }
-        /* --- END MODIFICATIONS FOR LEGEND STYLE --- */
-
-
         /* General styles (buttons not strictly needed for this layout but kept) */
         .buttons-container {
             margin-bottom: 20px;
@@ -190,12 +179,92 @@
                 .text(d => d);
         }
         
+        
         // Initial rendering of charts and the new legend
         document.addEventListener('DOMContentLoaded', () => {
             renderGlobalLegend('#global-legend');
             try { renderSankey('#chart-sankey'); } catch (e) { console.error('Failed to render sankey', e); }
             try { renderCircle('#chart-circle'); } catch (e) { console.error('Failed to render circle', e); }
         });
+    </script>
+    <script>
+        // Global state to track which parties are active (initially all)
+        const allParties = ["Democrat", "Republican", "Independent", "Other"];
+        window.activeParties = new Set(allParties);
+        
+        // --- Universal Update Function for all Charts ---
+        function updateAllCharts() {
+            // Re-render each chart, passing the current filter state
+            try { 
+                // Vis1 (Scatterplot) needs the full raw data and the filter
+                if (window.rlsData) {
+                    updateChart(window.rlsData); 
+                }
+            } catch (e) { console.error('Failed to update Vis1', e); }
+            
+            // For Sankey and Circle, simply re-run the render functions.
+            // They will need to be modified to use a global filter variable,
+            // or we'll pass the filter to them. For simplicity, let's keep
+            // the logic mostly in Vis1 and assume global update.
+            try { renderSankey('#chart-sankey'); } catch (e) { console.error('Failed to render sankey', e); }
+            try { renderCircle('#chart-circle'); } catch (e) { console.error('Failed to render circle', e); }
+        }
+
+        // --- Legend Renderer with Interactivity ---
+        function renderGlobalLegend(containerSelector = '#global-legend') {
+            const container = d3.select(containerSelector);
+            if (container.empty()) return;
+
+            const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
+            const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
+
+            container.html(''); // Clear previous content
+
+            container.append('div')
+                .style('font-weight', 'bold')
+                .style('margin-bottom', '10px')
+                .text('Party Affiliation');
+
+            const legendItems = container.selectAll(".legend-item")
+                .data(partyDomains)
+                .enter()
+                .append("div")
+                .attr("class", "legend-item")
+                // --- Add the Click Handler to each legend item ---
+                .on("click", function(event, d) {
+                    // d is the party name (e.g., "Democrat")
+                    if (window.activeParties.has(d)) {
+                        window.activeParties.delete(d);
+                    } else {
+                        window.activeParties.add(d);
+                    }
+                    
+                    // Update the visual state of the legend
+                    d3.select(this)
+                        .style("opacity", window.activeParties.has(d) ? 1 : 0.5);
+                    
+                    updateAllCharts();
+                })
+                .style("cursor", "pointer"); // Indicate it's clickable
+
+            // Add the color swatch
+            legendItems.append("div")
+                .attr("class", "color-swatch")
+                .style("background-color", (d, i) => partyColors[i]);
+
+            // Add the text label
+            legendItems.append("span")
+                .text(d => d);
+            
+            // Initial styling based on the active state
+            legendItems.style("opacity", d => window.activeParties.has(d) ? 1 : 0.5);
+        }// --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderGlobalLegend('#global-legend');
+            // The charts will be rendered when Vis1.js's data loads and calls updateChart()
+            // which in turn will call updateAllCharts.
+        });
+         
     </script>
 </body>
 </html>

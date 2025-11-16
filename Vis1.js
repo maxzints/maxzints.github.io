@@ -1,21 +1,30 @@
 // --- Data Loading and Initialization ---
-    const dimensions = {
-        width: 2000,
-        height: 600,
-        margin: { top: 25, right: 20, bottom: 30, left: 30 }
-    }
-    const width = dimensions.width - dimensions.margin.left - dimensions.margin.right;
-    const height = dimensions.height - dimensions.margin.top - dimensions.margin.bottom;
-    const radius = 1; // Radius of each data mark
-    const PARTY_OFFSET_AMOUNT = 0.25; // Controls how far off-center each party is pulled (0.0 to 0.5)
+const dimensions = {
+    width: 2000,
+    height: 600,
+    margin: { top: 25, right: 20, bottom: 30, left: 30 }
+}
+const width = dimensions.width - dimensions.margin.left - dimensions.margin.right;
+const height = dimensions.height - dimensions.margin.top - dimensions.margin.bottom;
+const radius = 1; // Radius of each data mark
+const PARTY_OFFSET_AMOUNT = 0.25; // Controls how far off-center each party is pulled (0.0 to 0.5)
 
-    // Cache processed/pivoted data per question to avoid repeated work
-    const processedCache = new Map();
+// Cache processed/pivoted data per question to avoid repeated work
+const processedCache = new Map();
+// Global state for the currently clicked respondent ID for highlighting
+window.highlightedID = null;
 
 d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
 
-    window.rlsData = rawData; 
-    updateChart(window.rlsData);
+    window.rlsData = rawData;
+
+    // Call the universal update, which will handle the initial filter state (from previous step)
+    if (typeof updateAllCharts === 'function') {
+        updateAllCharts();
+    } else {
+        // Fallback for direct testing
+        updateChart(window.rlsData);
+    }
 
 });
 
@@ -25,7 +34,7 @@ const questionColumns = [
     { id: "CHNG_B", label: "Societal Change B" },
     { id: "CHNG_C", label: "Societal Change C" }
 ];
-const Party_ID = "PARTY";       
+const Party_ID = "PARTY";
 
 //Map Party Codes to Party Names
 function mapPartyCode(code) {
@@ -50,10 +59,10 @@ function mapResponseCodeToLabel(code) {
 //Offset each party such that they have their own quadrant of the a grid cell
 function getPartyOffset(partyName) {
     switch (partyName) {
-        case "Republican": return { dx: -PARTY_OFFSET_AMOUNT/1.2, dy: -PARTY_OFFSET_AMOUNT }; 
-        case "Democrat": return { dx: PARTY_OFFSET_AMOUNT/1.2, dy: PARTY_OFFSET_AMOUNT }; 
-        case "Independent": return { dx: PARTY_OFFSET_AMOUNT/1.2, dy: -PARTY_OFFSET_AMOUNT }; 
-        case "Other": return { dx: -PARTY_OFFSET_AMOUNT/1.2, dy: PARTY_OFFSET_AMOUNT }; 
+        case "Republican": return { dx: -PARTY_OFFSET_AMOUNT / 1.2, dy: -PARTY_OFFSET_AMOUNT };
+        case "Democrat": return { dx: PARTY_OFFSET_AMOUNT / 1.2, dy: PARTY_OFFSET_AMOUNT };
+        case "Independent": return { dx: PARTY_OFFSET_AMOUNT / 1.2, dy: -PARTY_OFFSET_AMOUNT };
+        case "Other": return { dx: -PARTY_OFFSET_AMOUNT / 1.2, dy: PARTY_OFFSET_AMOUNT };
         default: return { dx: 0, dy: 0 };
     }
 }
@@ -63,6 +72,9 @@ function processAndPivotData(rawData, xScale, yScale) {
     const processedData = [];
 
     rawData.forEach(d => {
+        // --- FIX: Use 'P_SUID' as the unique respondent column ---
+        const respondentID = d['P_SUID'];
+        // --------------------------------------------------------
         const partyCode = +d[Party_ID];
         if (!(partyCode >= 1)) return; // skip invalid party
 
@@ -86,6 +98,9 @@ function processAndPivotData(rawData, xScale, yScale) {
             const targetY = cellCenterY + (partyOffset.dy * offsetFactorY);
 
             processedData.push({
+                // --- NEW: Add respondent ID to the node ---
+                id: respondentID,
+                // -----------------------------------------
                 partyCode: partyCode,
                 partyName: partyName,
                 questionId: q.id,
@@ -106,15 +121,13 @@ function processAndPivotData(rawData, xScale, yScale) {
 // Chart Update Function when button is pressed
 function updateChart(rawData) {
     // Clear old SVG and Canvas content
-    // target the specific container we placed on the dashboard
     const container = d3.select('#chart-vis1');
     d3.select('#chart-vis1 svg').remove();
-    d3.select('#chart-vis1 canvas').remove();
+    d3.select('#chart-vis1 canvas').remove(); // This clears BOTH canvases
 
     // Labels for each axis
     const rowNames = ["Better", "No Difference", "Worse"];
-    // x-axis will be the question IDs
-    
+
     const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
     const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
 
@@ -130,7 +143,6 @@ function updateChart(rawData) {
     const chartHeight = Math.max(120, totalHeight - dimensions.margin.top - dimensions.margin.bottom);
 
     // padding controls spacing between question bands and response rows
-    // Make question horizontal padding half of the vertical padding between response rows
     const yPaddingInner = 0.025; // vertical gap between response bands
     const xPadding = yPaddingInner / 4; // horizontal gap between question bands (half the vertical)
 
@@ -154,8 +166,13 @@ function updateChart(rawData) {
         processedCache.set(cacheKey, nodes);
     }
 
-    // Create a canvas for fast rendering of many points (SVG with 36k nodes is slow)
-    const canvas = container
+    // --- Filter Nodes based on the global state ---
+    const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
+    const filteredNodes = nodes.filter(d => activeParties.has(d.partyName));
+    // ---------------------------------------------
+
+    // 1. **SINGLE** CANVAS CREATION 
+    const canvasElement = container
         .append('canvas')
         .attr('width', totalWidth)
         .attr('height', totalHeight)
@@ -164,30 +181,109 @@ function updateChart(rawData) {
         .style('top', '0px')
         .node();
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvasElement.getContext('2d');
+
+    // --- Define checkHit (must be defined before the listener) ---
+    function checkHit(x, y) {
+        // simulation is defined below, so we must access its nodes array
+        const currentNodes = simulation.nodes();
+        const hitRadius = radius * 4;
+
+        const clickX = x - dimensions.margin.left;
+        const clickY = y - dimensions.margin.top;
+
+        for (let i = 0; i < currentNodes.length; i++) {
+            const d = currentNodes[i];
+            const dx = clickX - d.x;
+            const dy = clickY - d.y;
+            if (dx * dx + dy * dy < hitRadius * hitRadius) {
+                return d.id;
+            }
+        }
+        return null;
+    }
+    // -----------------------------------------------------------
+
+    // 2. **SINGLE** CLICK LISTENER (Robust and Consolidated)
+    d3.select(canvasElement).on('click', (event) => {
+        const rect = canvasElement.getBoundingClientRect();
+        const clickX = event.clientX - rect.left;
+        const clickY = event.clientY - rect.top;
+
+        const clickedID = checkHit(clickX, clickY);
+
+        // State Toggle Logic: Use window.highlightedID
+        if (clickedID !== null) {
+            // If the same ID is clicked, un-highlight it (toggle)
+            if (window.highlightedID === clickedID) {
+                window.highlightedID = null;
+            } else {
+                window.highlightedID = clickedID;
+            }
+        } else if (window.highlightedID !== null) {
+            // Clicked in empty space while something was highlighted (un-highlight)
+            window.highlightedID = null;
+        }
+
+        // Forced Update Trigger
+        console.log('--- CLICK EVENT FIRED! New ID is ' + window.highlightedID + ' ---');
+
+        if (typeof window.updateAllCharts === 'function') {
+            window.updateAllCharts();
+        } else {
+            draw();
+        }
+    });
+    // -------------------------------------------------------
 
     // Define and run the force simulation asynchronously (non-blocking)
-    const simulation = d3.forceSimulation(nodes)
+    const simulation = d3.forceSimulation(filteredNodes)
         .force('x', d3.forceX(d => d.targetX).strength(0.025))
-        .force('y', d3.forceY(d => d.targetY).strength(0.1))
+        .force('y', d3.forceY(d => d.targetY).strength(0.05))
         .force('collide', d3.forceCollide(radius * 3))
-        .force('repel', d3.forceManyBody().strength(-0.01))
+        .force('repel', d3.forceManyBody().strength(-0.03))
         .alpha(1)
         .alphaDecay(0.02);
 
     // draw function using canvas
     function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Use canvasElement instead of canvas
+        ctx.clearRect(0, 0, totalWidth, totalHeight);
         ctx.save();
-        // account for the svg group translation used for axes
-    ctx.translate(dimensions.margin.left, dimensions.margin.top);
-        for (let i = 0; i < nodes.length; i++) {
-            const d = nodes[i];
+        ctx.translate(dimensions.margin.left, dimensions.margin.top);
+
+        const nodesToDraw = simulation.nodes();
+
+        for (let i = 0; i < nodesToDraw.length; i++) {
+            const d = nodesToDraw[i];
+
+            // --- Highlighting Logic ---
+            let currentRadius = radius;
+            let currentAlpha = 0.9;
+            let strokeColor = null;
+
+            if (highlightedID !== null) {
+                if (d.id === highlightedID) {
+                    currentAlpha = 1.0;
+                    currentRadius = radius * 2;
+                    strokeColor = '#000000';
+                } else {
+                    currentAlpha = 0.1;
+                }
+            }
+            // ------------------------------------
+
             ctx.beginPath();
-            ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
+            ctx.arc(d.x, d.y, currentRadius, 0, Math.PI * 2);
             ctx.fillStyle = colorScale(d.partyName);
-            ctx.globalAlpha = 0.9;
+            ctx.globalAlpha = currentAlpha;
             ctx.fill();
+
+            if (strokeColor) {
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+            }
         }
         ctx.restore();
     }
@@ -196,10 +292,11 @@ function updateChart(rawData) {
     let scheduled = false;
     // Constrain nodes to remain inside their response-label band (y-axis containers)
     function constrainNodesToBands() {
-        // small padding so marks don't sit exactly on the band edge
         const pad = 0.01;
-        for (let i = 0; i < nodes.length; i++) {
-            const d = nodes[i];
+        const nodesToConstrain = simulation.nodes();
+
+        for (let i = 0; i < nodesToConstrain.length; i++) {
+            const d = nodesToConstrain[i];
             // vertical clamp to response band
             const bandStart = yScale(d.responseLabel);
             const bandEnd = bandStart + yScale.bandwidth();
@@ -237,10 +334,10 @@ function updateChart(rawData) {
 
     // initial draw for immediate feedback (positions initially equal target positions)
     draw();
-        
+
     // --- AXES ---
 
-    // X-Axis (Birthdecade labels and grid lines)
+    // X-Axis (Question labels and grid lines)
     const svg = container.append("svg")
         .attr("width", totalWidth)
         .attr("height", totalHeight)
@@ -281,34 +378,8 @@ function updateChart(rawData) {
 
     svg.selectAll(".domain").attr("stroke", "none");
 
-    // // --- LEGEND ---
-    // const legend = svg.append("g")
-    //     .attr("class", "legend")
-    //     .attr("transform", `translate(${chartWidth}, ${-dimensions.margin.top + 25})`);
-
-    // legend.append("text")
-    //     .attr("y", -10)
-    //     .attr("x", 0)
-    //     .style("font-weight", "bold")
-    //     .text("Party Names:");
-
-    // const legendItems = legend.selectAll(".legend-item")
-    //     .data(partyDomains)
-    //     .enter()
-    //     .append("g")
-    //     .attr("class", "legend-item")
-    //     .attr("transform", (d, i) => `translate(0, ${i * 20})`);
-
-    // legendItems.append("circle")
-    //     .attr("cx", 5)
-    //     .attr("cy", 5)
-    //     .attr("r", 5)
-    //     .style("fill", d => colorScale(d));
-
-    // legendItems.append("text")
-    //     .attr("x", 15)
-    //     .attr("y", 9)
-    //     .text(d => d);
-
-    // No buttons to update in this layout
+    // NOTE: The click listener logic is now BEFORE the simulation definition.
+    // This is valid in JavaScript, as long as `simulation` is defined before 
+    // the listener actually executes its logic (which it is, since the 
+    // click happens after the initial render).
 }

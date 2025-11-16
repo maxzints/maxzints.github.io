@@ -1,4 +1,4 @@
-// sankey.js — Sankey: Party -> Race -> Income (D3)
+// sankey.js — Sankey: Party -> Income (D3)
 // Exposes renderSankey(containerSelector) function.
 
 function renderSankey(containerSelector = '#chart-sankey') {
@@ -30,17 +30,28 @@ function renderSankey(containerSelector = '#chart-sankey') {
     return 'Unknown';
   }
 
-  d3.csv('ScrubbedRLSDataFile.csv').then(data => {
-    console.log('sankey: loaded CSV rows =', data.length);
-    if (typeof d3.sankey !== 'function' || typeof d3.sankeyLinkHorizontal !== 'function') {
+  if (typeof d3.sankey !== 'function' || typeof d3.sankeyLinkHorizontal !== 'function') {
       const msg = 'd3-sankey is not available. Make sure the d3-sankey script is included before sankey.js';
       console.error(msg);
       d3.select('#sankey-error').text(msg);
       return;
     }
-    // Aggregate directly from Party -> Income (drop Race stage)
-    const partyInc = new Map();
 
+  // --- Helper Function to Build and Layout Sankey Graph (Modified) ---
+  function buildSankeyGraph(data, isHighlightOverlay = false) {
+    const nodes = [];
+    const nodeIndex = new Map();
+    function ensureNode(key, displayName) {
+      if (!nodeIndex.has(key)) {
+        nodeIndex.set(key, nodes.length);
+        // Add a 'type' property to distinguish Party from Income
+        const type = key.startsWith('P:') ? 'Party' : 'Income'; 
+        nodes.push({ name: displayName, type: type });
+      }
+      return nodeIndex.get(key);
+    }
+    
+    const partyInc = new Map();
     data.forEach(d => {
       const p = mapParty(d['PARTY']);
       const inc = mapInc(d['INC_SDT1']);
@@ -48,21 +59,7 @@ function renderSankey(containerSelector = '#chart-sankey') {
       partyInc.set(key, (partyInc.get(key) || 0) + 1);
     });
 
-    // Use a keyed index to avoid accidental name collisions between categories
-    // (e.g. 'Other' might appear for both Party and Race). Internally store
-    // nodes with a display name but index them by a category-prefixed key.
-    const nodes = [];
-    const nodeIndex = new Map();
-    function ensureNode(key, displayName) {
-      if (!nodeIndex.has(key)) {
-        nodeIndex.set(key, nodes.length);
-        nodes.push({ name: displayName });
-      }
-      return nodeIndex.get(key);
-    }
-
     const links = [];
-    // Build Party -> Income links (no Race layer)
     for (let [k, v] of partyInc.entries()) {
       const [p, inc] = k.split('||');
       const src = ensureNode('P:' + p, p);
@@ -73,7 +70,7 @@ function renderSankey(containerSelector = '#chart-sankey') {
     const sankeyGen = d3.sankey()
       .nodeWidth(18)
       .nodePadding(10)
-      .extent([[1, 1], [width - 1, height - 6]]);
+      .extent([[1, 1], [width - 1, height - (isHighlightOverlay ? 1 : 6)]]); 
 
     const graph = { nodes: nodes.map(d => Object.assign({}, d)), links: links.map(d => Object.assign({}, d)) };
     try {
@@ -81,27 +78,67 @@ function renderSankey(containerSelector = '#chart-sankey') {
     } catch (err) {
       console.error('sankey: sankeyGen failed', err);
       d3.select('#sankey-error').text('Failed to layout sankey: ' + err.message);
-      return;
+      return { graph: null, color: null };
     }
+    
+    // Define Colors
     const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
     const partyDomains = ["Democrat", "Republican", "Independent", "Other"];  
+    const INCOME_COLOR = "#9467bd"; // Choose a neutral color (e.g., Purple)
 
-    const color = d3.scaleOrdinal()
+    const colorScale = d3.scaleOrdinal()
       .domain(partyDomains) 
-      .range(partyColors); 
+      .range(partyColors);
+      
+    // Return both the scale and the neutral income color
+    return { graph, colorScale, INCOME_COLOR };
+  }
+  // --- End Helper Function ---
+    
+  // --- FIX: Use global data if available, otherwise load from file ---
+  const loadData = () => {
+      if (typeof window !== 'undefined' && window.rlsData) {
+          return Promise.resolve(window.rlsData); 
+      }
+      return d3.csv('ScrubbedRLSDataFile.csv'); 
+  };
+    
+  loadData().then(data => {
+  // --- END FIX ---
+  
+    // 1. Apply Party Filter (Existing logic from previous step)
+    const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
+    const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
+    const fullFilteredData = data.filter(d => activeParties.has(mapParty(d.PARTY)));
 
+    // 2. Determine Opacity
+    const isHighlighting = typeof window !== 'undefined' && window.highlightedID !== null;
+    const baseOpacity = isHighlighting ? 0.2 : 1.0;
+
+    // 3. Build Full Sankey Graph
+    const { graph, colorScale, INCOME_COLOR } = buildSankeyGraph(fullFilteredData);
+
+    if (!graph) return;
+
+    // Helper to get color based on node type
+    const getNodeColor = (d) => d.type === 'Income' ? INCOME_COLOR : colorScale(d.name);
+
+    // 4. Draw Links (Base Layer)
     svg.append('g')
       .attr('fill', 'none')
+      .attr('class', 'base-links')
       .selectAll('path')
       .data(graph.links)
       .enter().append('path')
       .attr('d', d3.sankeyLinkHorizontal())
       .attr('stroke', d => {
+        // Links get the color of their source node (Party)
         const sname = d.source && d.source.name ? d.source.name : (typeof d.source === 'number' ? (graph.nodes[d.source] && graph.nodes[d.source].name) : '');
-        return color(sname);
+        return colorScale(sname);
       })
       .attr('stroke-width', d => Math.max(1, d.width))
       .attr('class', 'link')
+      .style('opacity', baseOpacity) 
       .append('title')
       .text(d => {
         const s = d.source && d.source.name ? d.source.name : (typeof d.source === 'number' ? (graph.nodes[d.source] && graph.nodes[d.source].name) : '');
@@ -109,7 +146,9 @@ function renderSankey(containerSelector = '#chart-sankey') {
         return `${s} → ${t}: ${d.value}`;
       });
 
+    // 5. Draw Nodes (Base Layer) - MODIFIED COLOR LOGIC
     const node = svg.append('g')
+      .attr('class', 'base-nodes')
       .selectAll('.node')
       .data(graph.nodes)
       .enter().append('g')
@@ -119,8 +158,9 @@ function renderSankey(containerSelector = '#chart-sankey') {
     node.append('rect')
       .attr('height', d => Math.max(1, d.y1 - d.y0))
       .attr('width', d => d.x1 - d.x0)
-      .attr('fill', d => color(d.name))
+      .attr('fill', getNodeColor) // Use helper function to color Income nodes differently
       .attr('stroke', '#000')
+      .style('opacity', baseOpacity) 
       .append('title')
       .text(d => `${d.name}: ${d.value || d.value === 0 ? d.value : ''}`);
 
@@ -130,7 +170,76 @@ function renderSankey(containerSelector = '#chart-sankey') {
       .attr('dy', '0.35em')
       .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
       .text(d => d.name)
-      .style('font-size', '12px');
+      .style('font-size', '12px')
+      .style('opacity', isHighlighting ? 1.0 : 0.9); 
+
+    // --- 6. Highlighted Overlay (New Logic) ---
+    if (isHighlighting) {
+        const highlightedID = window.highlightedID;
+        
+        // Debug check (from previous step)
+        if (!highlightedID) {
+            console.log('Sankey: Highlighted ID is null/undefined, skipping overlay.');
+            return;
+        }
+
+        // Filter raw data using 'P_SUID' 
+        const highlightedData = fullFilteredData.filter(d => {
+            const dataID = String(d.P_SUID).trim();
+            const stateID = String(highlightedID).trim();
+            return dataID === stateID; 
+        }); 
+
+        // Add a debug check here to see if the filter succeeded
+        console.log(`Sankey: Filtered to highlight ${highlightedData.length} respondent(s) for ID ${highlightedID}`);
+
+
+        if (highlightedData.length > 0) {
+            // Re-run aggregation and layout only for the highlighted respondent
+            const { graph: highlightedGraph, colorScale: hColorScale, INCOME_COLOR: hINCOME_COLOR } = buildSankeyGraph(highlightedData, true);
+
+            if (!highlightedGraph) return;
+
+            const getHighlightNodeColor = (d) => d.type === 'Income' ? hINCOME_COLOR : hColorScale(d.name);
+            
+            // Draw Highlighted Links (Overlay)
+            svg.append('g')
+              .attr('fill', 'none')
+              .attr('class', 'highlight-links')
+              .selectAll('path')
+              .data(highlightedGraph.links)
+              .enter().append('path')
+              .attr('d', d3.sankeyLinkHorizontal())
+              .attr('stroke', d => {
+                // Links get the color of their source node (Party)
+                const sname = d.source && d.source.name ? d.source.name : (typeof d.source === 'number' ? (highlightedGraph.nodes[d.source] && highlightedGraph.nodes[d.source].name) : '');
+                return hColorScale(sname);
+              })
+              // Fixed width for clear visibility
+              .attr('stroke-width', 5) 
+              .attr('class', 'highlight-link')
+              .style('opacity', 1.0) 
+              .attr('stroke-linejoin', 'round')
+              .attr('stroke-linecap', 'round');
+              
+             // Draw Highlighted Nodes (Overlay) - MODIFIED COLOR LOGIC
+            const hNode = svg.append('g')
+              .attr('class', 'highlight-nodes')
+              .selectAll('.node-h')
+              .data(highlightedGraph.nodes)
+              .enter().append('g')
+              .attr('class', 'node-h')
+              .attr('transform', d => `translate(${d.x0},${d.y0})`);
+
+            hNode.append('rect')
+              .attr('height', d => Math.max(1, d.y1 - d.y0))
+              .attr('width', d => d.x1 - d.x0)
+              .attr('fill', getHighlightNodeColor) // Use helper function to color Income nodes differently
+              .attr('stroke', '#000')
+              .attr('stroke-width', 2)
+              .style('opacity', 1.0);
+        }
+    }
 
   }).catch(err => {
     console.error('sankey: failed to load CSV', err);
