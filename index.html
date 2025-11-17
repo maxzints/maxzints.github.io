@@ -4,11 +4,15 @@
     <meta charset="utf-8">
     <title>Data Visualization Project Plot</title>
     <style>
-        body { 
-            margin: 0; 
-            overflow-x: hidden; 
+        
+        body {
+            margin: 0;
+            overflow-x: hidden;
             font-family: Arial, sans-serif;
-        } 
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
         /* Styling for the grid lines */
         .x-axis line, .y-axis line {
             stroke: #ccc;
@@ -20,13 +24,85 @@
         /* Container styles */
         .chart-container {
             position: relative;
-            margin: 20px;
+            margin: 0;
+            width: 100%;
+            height: 100%;
         }
+        /* New dashboard structure using flexbox for top/bottom split */
+        .dashboard {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+        /* Top half container (Vis1) */
+        .dash-top {
+            flex: 2;
+            min-height: 0;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        /* Bottom half container (Sankey and Circle) */
+        .dash-bottom {
+            flex: 1;
+            display: flex;
+            min-height: 0;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        /* Item within the bottom half (Sankey/Circle) */
+        .chart-item {
+            flex: 1;
+            margin: 0 20px;
+            height: 100%;
+        }
+
+        /* Remove margin from first and last chart-item (revising original logic) */
+        .dash-bottom .chart-item:first-child { margin-left: 0; }
+        .dash-bottom .chart-item:last-child { margin-right: 0; }
+
+        /* Sankey Diagram (75% of bottom width) */
+        #chart-sankey {
+            flex: 15 1 0%; 
+            margin-left: 0;
+            margin-right: 20px; 
+        }
+        /* Circle Diagram (15% of bottom width) */
+        #chart-circle {
+            flex: 3 1 0%;
+            margin-left: 0;
+            margin-right: 20px;
+        }
+
+        /* Global Legend (10% of bottom width) */
+        #global-legend {
+            flex: 2 1 0%;
+            height: 100%;
+            padding: 10px; 
+            box-sizing: border-box;
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        /* Legend Specific Styles for better alignment (These make the colors visible) */
+        .legend-item {
+            display: flex; /* Aligns swatch and text horizontally */
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .color-swatch {
+            width: 15px; /* Size of the color square */
+            height: 15px;
+            margin-right: 8px; /* Spacing between color and text */
+            border-radius: 3px;
+            border: 1px solid #ddd; /* A subtle border */
+        }
+        /* General styles (buttons not strictly needed for this layout but kept) */
         .buttons-container {
             margin-bottom: 20px;
             text-align: center;
         }
-        /* Button styles */
         .buttons-container button {
             padding: 10px 15px;
             margin: 0 5px;
@@ -46,40 +122,149 @@
             color: white;
             border-color: #007bff;
         }
-        /* Nav buttons linking to standalone visuals */
-        .nav-buttons {
-            text-align: center;
-            margin: 14px 0;
-        }
-        .nav-buttons .nav-button {
-            display: inline-block;
-            padding: 8px 12px;
-            margin: 0 6px;
-            background: #28a745;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 600;
-            border: 1px solid #208038;
-        }
-        .nav-buttons .nav-button.sankey {
-            background: #17a2b8;
-            border-color: #12808a;
-        }
-        .nav-buttons .nav-button:hover {
-            opacity: 0.9;
-        }
+
     </style>
-    <script src="https://d3js.org/d3.v7.min.js"></script> 
+    <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
-    <div class="nav-buttons">
-        <a class="nav-button" href="circle.html">Circle</a>
-        <a class="nav-button sankey" href="sankey.html">Sankey</a>
+
+    <div class="dashboard">
+        <div class="dash-top">
+            <div id="chart-vis1" class="chart-container"></div>
+        </div>
+        <div class="dash-bottom">
+            <div id="chart-sankey" class="chart-item">
+                <div id="sankey-error"></div>
+            </div>
+            <div id="chart-circle" class="chart-item"></div>
+            <div id="global-legend"></div>
+        </div>
     </div>
-    <div class="buttons-container"></div>
-    <div class="chart-container"></div>
 
     <script src="Vis1.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+    <script src="sankey.js"></script>
+    <script src="circle.js"></script>
+    <script>
+        // Render the sankey and circle into their containers. Vis1 will render into #chart-vis1.
+        try { renderSankey('#chart-sankey'); } catch (e) { console.error('Failed to render sankey', e); }
+        try { renderCircle('#chart-circle'); } catch (e) { console.error('Failed to render circle', e); }
+    </script>
+    <script>
+        function renderGlobalLegend(containerSelector = '#global-legend') {
+            const container = d3.select(containerSelector);
+            if (container.empty()) return;
+
+            // Party data (Same data used in all three chart scripts)
+            const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
+            const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
+
+            container.append('div')
+                .style('font-weight', 'bold')
+                .style('margin-bottom', '10px')
+                .text('Party Affiliation');
+
+            const legendItems = container.selectAll(".legend-item")
+                .data(partyDomains)
+                .enter()
+                .append("div")
+                .attr("class", "legend-item");
+
+            // This line applies the specific color from the array
+            legendItems.append("div")
+                .attr("class", "color-swatch")
+                .style("background-color", (d, i) => partyColors[i]);
+
+            legendItems.append("span")
+                .text(d => d);
+        }
+        
+        
+        // Initial rendering of charts and the new legend
+        document.addEventListener('DOMContentLoaded', () => {
+            renderGlobalLegend('#global-legend');
+            try { renderSankey('#chart-sankey'); } catch (e) { console.error('Failed to render sankey', e); }
+            try { renderCircle('#chart-circle'); } catch (e) { console.error('Failed to render circle', e); }
+        });
+    </script>
+    <script>
+        // Global state to track which parties are active (initially all)
+        const allParties = ["Democrat", "Republican", "Independent", "Other"];
+        window.activeParties = new Set(allParties);
+        
+        // --- Universal Update Function for all Charts ---
+        function updateAllCharts() {
+            // Re-render each chart, passing the current filter state
+            try { 
+                // Vis1 (Scatterplot) needs the full raw data and the filter
+                if (window.rlsData) {
+                    updateChart(window.rlsData); 
+                }
+            } catch (e) { console.error('Failed to update Vis1', e); }
+            
+            // For Sankey and Circle, simply re-run the render functions.
+            // They will need to be modified to use a global filter variable,
+            // or we'll pass the filter to them. For simplicity, let's keep
+            // the logic mostly in Vis1 and assume global update.
+            try { renderSankey('#chart-sankey'); } catch (e) { console.error('Failed to render sankey', e); }
+            try { renderCircle('#chart-circle'); } catch (e) { console.error('Failed to render circle', e); }
+        }
+
+        // --- Legend Renderer with Interactivity ---
+        function renderGlobalLegend(containerSelector = '#global-legend') {
+            const container = d3.select(containerSelector);
+            if (container.empty()) return;
+
+            const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
+            const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
+
+            container.html(''); // Clear previous content
+
+            container.append('div')
+                .style('font-weight', 'bold')
+                .style('margin-bottom', '10px')
+                .text('Party Affiliation');
+
+            const legendItems = container.selectAll(".legend-item")
+                .data(partyDomains)
+                .enter()
+                .append("div")
+                .attr("class", "legend-item")
+                // --- Add the Click Handler to each legend item ---
+                .on("click", function(event, d) {
+                    // d is the party name (e.g., "Democrat")
+                    if (window.activeParties.has(d)) {
+                        window.activeParties.delete(d);
+                    } else {
+                        window.activeParties.add(d);
+                    }
+                    
+                    // Update the visual state of the legend
+                    d3.select(this)
+                        .style("opacity", window.activeParties.has(d) ? 1 : 0.5);
+                    
+                    updateAllCharts();
+                })
+                .style("cursor", "pointer"); // Indicate it's clickable
+
+            // Add the color swatch
+            legendItems.append("div")
+                .attr("class", "color-swatch")
+                .style("background-color", (d, i) => partyColors[i]);
+
+            // Add the text label
+            legendItems.append("span")
+                .text(d => d);
+            
+            // Initial styling based on the active state
+            legendItems.style("opacity", d => window.activeParties.has(d) ? 1 : 0.5);
+        }// --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderGlobalLegend('#global-legend');
+            // The charts will be rendered when Vis1.js's data loads and calls updateChart()
+            // which in turn will call updateAllCharts.
+        });
+         
+    </script>
 </body>
 </html>
