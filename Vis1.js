@@ -14,7 +14,7 @@ const processedCache = new Map();
 // Global state for the currently clicked respondent ID for highlighting
 window.highlightedID = null;
 
-d3.csv("ScrubbedRLSDataFileREDUCED10k.csv").then(function (rawData) {
+d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
 
     window.rlsData = rawData;
 
