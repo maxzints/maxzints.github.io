@@ -30,9 +30,9 @@ d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
 
 // --- Attribute Definitions ---
 const questionColumns = [
-    { id: "CHNG_A", label: "Societal Change A" },
-    { id: "CHNG_B", label: "Societal Change B" },
-    { id: "CHNG_C", label: "Societal Change C" }
+    { id: "CHNG_A", label: "A growing population of immigrants: Is this a change for the better, worse, or not made much difference?" },
+    { id: "CHNG_B", label: "More women in the workforce: Is this a change for the better, worse, or not made much difference?" },
+    { id: "CHNG_C", label: "Greater acceptance of people who are transgender: Is this a change for the better, worse, or not made much difference?" }
 ];
 const Party_ID = "PARTY";
 
