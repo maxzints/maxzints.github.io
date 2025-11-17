@@ -6,7 +6,7 @@ const dimensions = {
 }
 const width = dimensions.width - dimensions.margin.left - dimensions.margin.right;
 const height = dimensions.height - dimensions.margin.top - dimensions.margin.bottom;
-const radius = 1; // Radius of each data mark
+const radius = 1; // Radius of each mark
 const PARTY_OFFSET_AMOUNT = 0.25; // Controls how far off-center each party is pulled (0.0 to 0.5)
 
 // Cache processed/pivoted data per question to avoid repeated work
@@ -14,25 +14,24 @@ const processedCache = new Map();
 // Global state for the currently clicked respondent ID for highlighting
 window.highlightedID = null;
 
-d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
+d3.csv("ScrubbedRLSDataFileREDUCED10k.csv").then(function (rawData) {
 
     window.rlsData = rawData;
 
-    // Call the universal update, which will handle the initial filter state (from previous step)
+    // Call the universal update for initial filter state 
     if (typeof updateAllCharts === 'function') {
         updateAllCharts();
     } else {
-        // Fallback for direct testing
         updateChart(window.rlsData);
     }
 
 });
 
-// --- Attribute Definitions ---
+
 const questionColumns = [
-    { id: "CHNG_A", label: "A growing population of immigrants: Is this a change for the better, worse, or not made much difference?" },
-    { id: "CHNG_B", label: "More women in the workforce: Is this a change for the better, worse, or not made much difference?" },
-    { id: "CHNG_C", label: "Greater acceptance of people who are transgender: Is this a change for the better, worse, or not made much difference?" }
+    { id: "CHNG_A", label: "A growing population of immigrants" },
+    { id: "CHNG_B", label: "More women in the workforce" },
+    { id: "CHNG_C", label: "Acceptance of transgender people" }
 ];
 const Party_ID = "PARTY";
 
@@ -72,9 +71,7 @@ function processAndPivotData(rawData, xScale, yScale) {
     const processedData = [];
 
     rawData.forEach(d => {
-        // --- FIX: Use 'P_SUID' as the unique respondent column ---
         const respondentID = d['P_SUID'];
-        // --------------------------------------------------------
         const partyCode = +d[Party_ID];
         if (!(partyCode >= 1)) return; // skip invalid party
 
@@ -88,8 +85,8 @@ function processAndPivotData(rawData, xScale, yScale) {
             if (responseLabel === null) return;
 
             // Calc center of grid cell for this question column
-            const cellCenterX = xScale(q.id) + xScale.bandwidth() / 2;
-            const cellCenterY = yScale(responseLabel) + yScale.bandwidth() / 2;
+            const cellCenterX = xScale(responseLabel) + xScale.bandwidth() / 2;
+            const cellCenterY = yScale(q.id) + yScale.bandwidth() / 2;
 
             const offsetFactorX = xScale.bandwidth();
             const offsetFactorY = yScale.bandwidth();
@@ -98,9 +95,7 @@ function processAndPivotData(rawData, xScale, yScale) {
             const targetY = cellCenterY + (partyOffset.dy * offsetFactorY);
 
             processedData.push({
-                // --- NEW: Add respondent ID to the node ---
                 id: respondentID,
-                // -----------------------------------------
                 partyCode: partyCode,
                 partyName: partyName,
                 questionId: q.id,
@@ -126,7 +121,8 @@ function updateChart(rawData) {
     d3.select('#chart-vis1 canvas').remove(); // This clears BOTH canvases
 
     // Labels for each axis
-    const rowNames = ["Better", "No Difference", "Worse"];
+    const questionIDs = questionColumns.map(q => q.id);
+    const responseLabels = ["Better", "No Difference", "Worse"];
 
     const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
     const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
@@ -142,21 +138,21 @@ function updateChart(rawData) {
     const chartWidth = Math.max(200, totalWidth - dimensions.margin.left - dimensions.margin.right);
     const chartHeight = Math.max(120, totalHeight - dimensions.margin.top - dimensions.margin.bottom);
 
-    // padding controls spacing between question bands and response rows
+    //spacing between question bands and response rows
     const yPaddingInner = 0.025; // vertical gap between response bands
-    const xPadding = yPaddingInner / 4; // horizontal gap between question bands (half the vertical)
+    const xPadding = yPaddingInner / 4; // horizontal gap between question bands
 
     const xScale = d3.scaleBand()
-        .domain(questionColumns.map(q => q.id))
+        .domain(responseLabels)
         .range([0, chartWidth])
         .padding(xPadding);
 
     const yScale = d3.scaleBand()
-        .domain(rowNames)
+        .domain(questionIDs)
         .range([0, chartHeight])
         .paddingInner(yPaddingInner);
 
-    // Process data (with caching) — positions are in pixel space relative to scales
+
     const cacheKey = 'ALL_QUESTIONS';
     let nodes;
     if (processedCache.has(cacheKey)) {
@@ -166,12 +162,12 @@ function updateChart(rawData) {
         processedCache.set(cacheKey, nodes);
     }
 
-    // --- Filter Nodes based on the global state ---
+    //Filter Nodes based on the global state
     const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
     const filteredNodes = nodes.filter(d => activeParties.has(d.partyName));
-    // ---------------------------------------------
 
-    // 1. **SINGLE** CANVAS CREATION 
+
+    //CANVAS CREATION 
     const canvasElement = container
         .append('canvas')
         .attr('width', totalWidth)
@@ -183,9 +179,8 @@ function updateChart(rawData) {
 
     const ctx = canvasElement.getContext('2d');
 
-    // --- Define checkHit (must be defined before the listener) ---
+
     function checkHit(x, y) {
-        // simulation is defined below, so we must access its nodes array
         const currentNodes = simulation.nodes();
         const hitRadius = radius * 4;
 
@@ -202,9 +197,8 @@ function updateChart(rawData) {
         }
         return null;
     }
-    // -----------------------------------------------------------
 
-    // 2. **SINGLE** CLICK LISTENER (Robust and Consolidated)
+    // 2. CLICK LISTENER 
     d3.select(canvasElement).on('click', (event) => {
         const rect = canvasElement.getBoundingClientRect();
         const clickX = event.clientX - rect.left;
@@ -234,9 +228,8 @@ function updateChart(rawData) {
             draw();
         }
     });
-    // -------------------------------------------------------
 
-    // Define and run the force simulation asynchronously (non-blocking)
+    // Force simulation 
     const simulation = d3.forceSimulation(filteredNodes)
         .force('x', d3.forceX(d => d.targetX).strength(0.025))
         .force('y', d3.forceY(d => d.targetY).strength(0.05))
@@ -257,7 +250,7 @@ function updateChart(rawData) {
         for (let i = 0; i < nodesToDraw.length; i++) {
             const d = nodesToDraw[i];
 
-            // --- Highlighting Logic ---
+            // Highlighting Logic
             let currentRadius = radius;
             let currentAlpha = 0.9;
             let strokeColor = null;
@@ -271,7 +264,6 @@ function updateChart(rawData) {
                     currentAlpha = 0.1;
                 }
             }
-            // ------------------------------------
 
             ctx.beginPath();
             ctx.arc(d.x, d.y, currentRadius, 0, Math.PI * 2);
@@ -292,22 +284,22 @@ function updateChart(rawData) {
     let scheduled = false;
     // Constrain nodes to remain inside their response-label band (y-axis containers)
     function constrainNodesToBands() {
-        const pad = 0.01;
+        const pad = 0.1;
         const nodesToConstrain = simulation.nodes();
 
         for (let i = 0; i < nodesToConstrain.length; i++) {
             const d = nodesToConstrain[i];
             // vertical clamp to response band
-            const bandStart = yScale(d.responseLabel);
-            const bandEnd = bandStart + yScale.bandwidth();
-            const minY = bandStart + radius + pad;
-            const maxY = bandEnd - radius - pad;
+            const bandStartY = yScale(d.questionId);
+            const bandEndY = bandStartY + yScale.bandwidth();
+            const minY = bandStartY + radius + pad;
+            const maxY = bandEndY - radius - pad;
             if (d.y < minY) d.y = minY;
             if (d.y > maxY) d.y = maxY;
 
             // horizontal clamp to question column band
             if (d.questionId) {
-                const colStart = xScale(d.questionId);
+                const colStart = xScale(d.responseLabel);
                 const colEnd = colStart + xScale.bandwidth();
                 const minX = colStart + radius + pad;
                 const maxX = colEnd - radius - pad;
@@ -332,12 +324,10 @@ function updateChart(rawData) {
     // ensure final draw after simulation ends
     simulation.on('end', draw);
 
-    // initial draw for immediate feedback (positions initially equal target positions)
+    // initial draw
     draw();
 
-    // --- AXES ---
-
-    // X-Axis (Question labels and grid lines)
+    // X-Axis, Response Labels and grid lines
     const svg = container.append("svg")
         .attr("width", totalWidth)
         .attr("height", totalHeight)
@@ -350,36 +340,26 @@ function updateChart(rawData) {
         .attr("transform", `translate(0, ${chartHeight})`)
         .call(d3.axisTop(xScale)
             .tickSize(chartHeight)
+        )
+        .selectAll(".tick line")
+        .attr("stroke", "#ccc")
+        .attr("stroke-dasharray", "2,2");
+
+    // Y-Axis, Question labels and grid lines
+    svg.append("g")
+        .attr("class", "y-axis")
+        .call(d3.axisLeft(yScale)
+            .tickSize(-chartWidth) // Extend grid lines horizontally
             .tickFormat(d => {
                 const q = questionColumns.find(qc => qc.id === d);
                 return q ? q.label : d;
             }));
 
-    xAxisGroup.selectAll(".tick line")
-        .attr("stroke", "#ccc")
-        .attr("stroke-dasharray", "2,2");
 
-    // Y-Axis (Response Labels and grid lines)
-    svg.append("g")
-        .attr("class", "y-axis")
-        .call(d3.axisLeft(yScale)
-            .tickSize(-chartWidth))
-        .selectAll(".tick line")
-        .attr("stroke", "#ccc")
-        .attr("stroke-dasharray", "2,2");
-
-    // Y-Axis Label Rotation
+    // Y-Axis Label adjustment
     svg.select(".y-axis")
         .selectAll("text")
-        .attr("x", -12)
-        .attr("y", -8)
-        .attr("transform", "rotate(-65)")
-        .style("text-anchor", "middle");
+        .attr("x", 125) // Move text right
 
     svg.selectAll(".domain").attr("stroke", "none");
-
-    // NOTE: The click listener logic is now BEFORE the simulation definition.
-    // This is valid in JavaScript, as long as `simulation` is defined before 
-    // the listener actually executes its logic (which it is, since the 
-    // click happens after the initial render).
 }
