@@ -18,7 +18,8 @@ function renderSankey(containerSelector = '#chart-sankey') {
 
   function mapParty(code) { switch (+code) { case 1: return 'Republican'; case 2: return 'Democrat'; case 3: return 'Independent'; default: return 'Other'; } }
   function mapRace(code) { switch (+code) { case 1: return 'White'; case 2: return 'Black'; case 3: return 'Asian'; case 4: return 'Mixed'; default: return 'Other'; } }
-  function mapInc(code) {
+  // Use global mapInc if available, otherwise define fallback
+  const mapInc = typeof window.mapInc === 'function' ? window.mapInc : function(code) {
     const v = +code;
     if (v === 100) return '$30k - $50k';
     if (v === 200) return '$50k - $100k';
@@ -28,7 +29,10 @@ function renderSankey(containerSelector = '#chart-sankey') {
     if (v === 3 || v === 4) return '$50k - $100k';
     if (v === 5 || v === 6) return '$100k - $150k';
     return 'Unknown';
-  }
+  };
+  // Use global mapEdu if available, otherwise define fallback
+  const mapEdu = typeof window.mapEdu === 'function' ? window.mapEdu : function(code) { switch (+code) { case 1: return 'High School <'; case 2: return 'Associates <'; case 3: return 'Bachelor'; case 4: return 'Masters +'; default: return 'Unknown'; } };
+
 
   if (typeof d3.sankey !== 'function' || typeof d3.sankeyLinkHorizontal !== 'function') {
       const msg = 'd3-sankey is not available. Make sure the d3-sankey script is included before sankey.js';
@@ -36,6 +40,11 @@ function renderSankey(containerSelector = '#chart-sankey') {
       d3.select('#sankey-error').text(msg);
       return;
     }
+  
+  // Define local fallback for allIncomes (should be defined in index.html)
+  const allIncomesFallback = ['$30k - $50k', '$50k - $100k', '$100k - $150k', '$150k+', 'Unknown'];
+  const allIncomesGlobal = typeof window !== 'undefined' && window.allIncomes ? window.allIncomes : allIncomesFallback;
+
 
   // --- Helper Function to Build and Layout Sankey Graph (Modified) ---
   function buildSankeyGraph(data, isHighlightOverlay = false) {
@@ -106,10 +115,21 @@ function renderSankey(containerSelector = '#chart-sankey') {
   loadData().then(data => {
   // --- END FIX ---
   
-    // 1. Apply Party Filter (Existing logic from previous step)
+    // 1. Apply All Filters (Party + Income/Edu Filters)
     const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
     const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
-    const fullFilteredData = data.filter(d => activeParties.has(mapParty(d.PARTY)));
+    
+    // Retrieve global filter state
+    const activeIncomes = typeof window !== 'undefined' && window.activeIncomes ? window.activeIncomes : new Set(allIncomesGlobal);
+    
+    const allEdus = typeof window !== 'undefined' && window.allEdus ? window.allEdus : ['High School <', 'Associates <', 'Bachelor', 'Masters +', 'Unknown'];
+    const activeEdus = typeof window !== 'undefined' && window.activeEdus ? window.activeEdus : new Set(allEdus);
+    
+    const fullFilteredData = data.filter(d => 
+        activeParties.has(mapParty(d.PARTY)) &&
+        activeIncomes.has(mapInc(d.INC_SDT1)) &&
+        activeEdus.has(mapEdu(d.EDUCREC))
+    );
 
     // 2. Determine Opacity
     const isHighlighting = typeof window !== 'undefined' && window.highlightedID !== null;
@@ -146,14 +166,44 @@ function renderSankey(containerSelector = '#chart-sankey') {
         return `${s} → ${t}: ${d.value}`;
       });
 
-    // 5. Draw Nodes (Base Layer) - MODIFIED COLOR LOGIC
+    // 5. Draw Nodes (Base Layer) - ADD CORRECTED CLICK HANDLER
     const node = svg.append('g')
       .attr('class', 'base-nodes')
       .selectAll('.node')
       .data(graph.nodes)
       .enter().append('g')
       .attr('class', 'node')
-      .attr('transform', d => `translate(${d.x0},${d.y0})`);
+      .attr('transform', d => `translate(${d.x0},${d.y0})`)
+      // Setting cursor pointer to indicate interactivity
+      .style('cursor', d => d.type === 'Income' ? 'pointer' : 'default')
+      
+      // NEW CLICK HANDLER WITH CORRECTED LOGIC
+      .on('click', function(event, d) {
+        // Only allow filtering on Income nodes (nodes on the right side)
+        if (d.type !== 'Income' || typeof window.updateAllCharts !== 'function') return;
+        
+        const clickedIncome = d.name;
+        // Use the list structure to easily check if ALL were selected
+        const allIncomesSelected = window.activeIncomes.size === allIncomesGlobal.length;
+
+        // --- Corrected Single-Select/Toggle Logic ---
+        if (allIncomesSelected) {
+            // Case 1: Currently showing ALL, click to single-select.
+            window.activeIncomes = new Set([clickedIncome]);
+        } else if (window.activeIncomes.has(clickedIncome) && window.activeIncomes.size === 1) {
+            // Case 2: Currently single-selected (this item), click to revert to ALL.
+            window.activeIncomes = new Set(allIncomesGlobal);
+        } else {
+            // Case 3: A different item is single-selected, or multiple items are selected. Click to single-select this one.
+            window.activeIncomes = new Set([clickedIncome]);
+        }
+        
+        // Un-highlight any specific respondent
+        window.highlightedID = null;
+
+        window.updateAllCharts();
+      });
+
 
     node.append('rect')
       .attr('height', d => Math.max(1, d.y1 - d.y0))
@@ -212,8 +262,8 @@ function renderSankey(containerSelector = '#chart-sankey') {
               .attr('d', d3.sankeyLinkHorizontal())
               .attr('stroke', d => {
                 // Links get the color of their source node (Party)
-                const sname = d.source && d.source.name ? d.source.name : (typeof d.source === 'number' ? (highlightedGraph.nodes[d.source] && highlightedGraph.nodes[d.source].name) : '');
-                return hColorScale(sname);
+                const sname = d.source && d.source.name ? d.source.name : (typeof d.source === 'number' ? (highlightedGraph.nodes[d.source] && graph.nodes[d.source].name) : '');
+                return colorScale(sname); // Use base color scale for consistency
               })
               // Fixed width for clear visibility
               .attr('stroke-width', 5) 

@@ -16,7 +16,8 @@ window.highlightedID = null;
 
 d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
 
-    window.rlsData = rawData;
+    const subsampledData = rawData.filter((d, i) => i % 3 === 0); 
+    window.rlsData = subsampledData; // Store the subsampled data globally  
 
     // Call the universal update for initial filter state 
     if (typeof updateAllCharts === 'function') {
@@ -73,6 +74,10 @@ function processAndPivotData(rawData, xScale, yScale) {
     rawData.forEach(d => {
         const respondentID = d['P_SUID'];
         const partyCode = +d[Party_ID];
+        // NEW: Pull income and education codes
+        const incCode = d['INC_SDT1'];
+        const eduCode = d['EDUCREC'];
+        
         if (!(partyCode >= 1)) return; // skip invalid party
 
         const partyName = mapPartyCode(partyCode);
@@ -98,6 +103,9 @@ function processAndPivotData(rawData, xScale, yScale) {
                 id: respondentID,
                 partyCode: partyCode,
                 partyName: partyName,
+                // NEW: Add codes for filtering later
+                incCode: incCode,
+                eduCode: eduCode,
                 questionId: q.id,
                 questionIndex: qi,
                 questionLabel: q.label,
@@ -162,9 +170,20 @@ function updateChart(rawData) {
         processedCache.set(cacheKey, nodes);
     }
 
-    //Filter Nodes based on the global state
+    // Filter Nodes based on the global state
     const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
-    const filteredNodes = nodes.filter(d => activeParties.has(d.partyName));
+    // NEW: Get Income/Edu Filters (using global map functions)
+    const allIncomes = ['$30k - $50k', '$50k - $100k', '$100k - $150k', '$150k+', 'Unknown']; // Defined in index.html for consistency
+    const activeIncomes = typeof window !== 'undefined' && window.activeIncomes ? window.activeIncomes : new Set(allIncomes);
+    const allEdus = ['High School <', 'Associates <', 'Bachelor', 'Masters +', 'Unknown']; // Defined in index.html for consistency
+    const activeEdus = typeof window !== 'undefined' && window.activeEdus ? window.activeEdus : new Set(allEdus);
+
+    const filteredNodes = nodes.filter(d => 
+        activeParties.has(d.partyName) &&
+        // NEW: Apply income and education filters using the codes stored in the node
+        (typeof mapInc === 'function' ? activeIncomes.has(mapInc(d.incCode)) : true) &&
+        (typeof mapEdu === 'function' ? activeEdus.has(mapEdu(d.eduCode)) : true)
+    );
 
 
     //CANVAS CREATION 
