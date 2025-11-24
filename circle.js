@@ -93,6 +93,8 @@ function renderCircle(containerSelector = '#chart-circle') {
           .text(`${d.data.name}${d.value ? ': ' + d.value : ''}`);
       })
       .on('mouseleave', () => tooltip.style('display', 'none'));
+      
+    const eduNodes = rootNode.descendants().filter(d => d.depth === 2);
 
     // --- 3. Highlighted Overlay (New Logic) ---
     if (isHighlighting) {
@@ -104,55 +106,84 @@ function renderCircle(containerSelector = '#chart-circle') {
         const dataID = String(d.P_SUID).trim();
         const stateID = String(highlightedID).trim();
         return dataID === stateID && activeParties.has(mapParty(d.PARTY));
-    }); 
-    
-    // Add a debug check here as well
-    console.log(`Circle: Filtered to highlight ${highlightedRespondentData.length} respondent(s) for ID ${highlightedID}`);  if (highlightedRespondentData.length > 0) {
-            // Get the specific party and education of the respondent
-            const resp = highlightedRespondentData[0];
-            const highlightedParty = mapParty(resp.PARTY);
-            const highlightedEdu = mapEdu(resp.EDUCREC);
-            
-            // Find the corresponding slice data objects (Party slice and Education slice)
-            const highlightNodes = rootNode.descendants().filter(d => {
-                if (d.depth === 1 && d.data.name === highlightedParty) return true; // Party slice
-                if (d.depth === 2 && d.data.name === highlightedEdu && d.parent && d.parent.data.name === highlightedParty) return true; // Education slice
-                return false;
-            });
+      });
 
-            // Draw Highlighted Slices (Overlay)
-            svg.selectAll('.highlight-slice')
-                .data(highlightNodes)
-                .enter().append('path')
-                .attr('d', arc)
-                .attr('fill', d => color(d.ancestors().slice(-2)[0].data.name))
-                .attr('stroke', '#000') // Black stroke for visibility
-                .attr('stroke-width', 2)
-                .attr('class', 'highlight-slice')
-                .style('opacity', 1.0)
-                // Add titles back for tooltips
-                .append('title')
-                .text(d => `${d.data.name}${d.value ? ': ' + d.value : ''}`);
-        }
+      // Add a debug check here as well
+      console.log(`Circle: Filtered to highlight ${highlightedRespondentData.length} respondent(s) for ID ${highlightedID}`); 
+      
+      if (highlightedRespondentData.length > 0) {
+        // Get the specific party and education of the respondent
+        const resp = highlightedRespondentData[0];
+        const highlightedParty = mapParty(resp.PARTY);
+        const highlightedEdu = mapEdu(resp.EDUCREC);
+
+        // Find the corresponding slice data objects (Party slice and Education slice)
+        const highlightNodes = rootNode.descendants().filter(d => {
+          if (d.depth === 1 && d.data.name === highlightedParty) return true; // Party slice
+          if (d.depth === 2 && d.data.name === highlightedEdu && d.parent && d.parent.data.name === highlightedParty) return true; // Education slice
+          return false;
+        });
+
+        // Draw Highlighted Slices (Overlay)
+        svg.selectAll('.highlight-slice')
+          .data(highlightNodes)
+          .enter().append('path')
+          .attr('d', arc)
+          .attr('fill', d => color(d.ancestors().slice(-2)[0].data.name))
+          .attr('stroke', '#000') // Black stroke for visibility
+          .attr('stroke-width', 2)
+          .attr('class', 'highlight-slice')
+          .style('opacity', 1.0)
+          // Add titles back for tooltips
+          .append('title')
+          .text(d => `${d.data.name}${d.value ? ': ' + d.value : ''}`);
+      }
     }
     // ------------------------------------------
 
-    // center label
-    svg.append('text')
+    // --- REVISED TEXT DRAWING LOGIC: Draw and Raise ---
+    // This element must be drawn AFTER all slices (base and highlight)
+    const labels = svg.selectAll('.edu-label')
+      .data(eduNodes)
+      .enter().append('text')
+      .attr('class', 'edu-label')
       .attr('text-anchor', 'middle')
-      .attr('dy', '-0.4em')
-      .style('font-weight', 'bold')
-      .text('Education by Party');
+      .attr('fill', '#000') // Black text for contrast
+      .style('font-size', '10px')
+      .style('opacity', 1.0) // CRITICAL FIX: Always 1.0 opacity for text
+      .style('pointer-events', 'none') 
+      .attr('transform', d => {
+        const [x, y] = arc.centroid(d);
+        const angle = (d.x0 + d.x1) / 2 * 180 / Math.PI;
+        const rotation = angle - 90;
+        const correctedRotation = (rotation > 90 && rotation < 270) ? rotation + 180 : rotation;
+        return `translate(${x-3},${y})rotate(${correctedRotation})`;
+      })
+      .text(d => {
+        switch (d.data.name) {
+          case 'High School <': return 'HS';
+          case 'Associates <': return 'AS';
+          case 'Bachelor': return 'BS';
+          case 'Masters +': return 'MS+';
+          default: return '';
+        }
+      });
+      
+    // Force the educational labels to the top layer
+    labels.raise();
+    // --- END REVISED TEXT DRAWING LOGIC ---
 
+
+    // center label (This should also be raised to be on top)
     svg.append('text')
       .attr('text-anchor', 'middle')
-      .attr('dy', '1.0em')
-      .style('font-size', '12px')
-      .text('Hover slices for counts');
+      .style('font-weight', 'bold')
+      .text('Education Levels')
+      .raise(); // CRITICAL FIX: Raise the center label too
 
   }).catch(err => {
     console.error('circle: failed to load CSV', err);
-    container.append('div').style('color','crimson').text('Failed to load data. Check console.');
+    container.append('div').style('color', 'crimson').text('Failed to load data. Check console.');
   });
 }
 

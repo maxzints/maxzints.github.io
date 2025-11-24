@@ -16,7 +16,8 @@ window.highlightedID = null;
 
 d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
 
-    window.rlsData = rawData;
+    const subsampledData = rawData.filter((d, i) => i % 3 === 0); 
+    window.rlsData = subsampledData; // Store the subsampled data globally  
 
     // Call the universal update for initial filter state 
     if (typeof updateAllCharts === 'function') {
