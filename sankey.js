@@ -31,7 +31,7 @@ function renderSankey(containerSelector = '#chart-sankey') {
       return;
     }
   
-  const allIncomesFallback = ['<$30k','$30k - $50k', '$50k - $100k', '$100k - $150k', '>$150k', 'Unknown'];
+  const allIncomesFallback = ['<$30k', '$30k - $50k', '$50k - $100k', '$100k - $150k', '$>150k', 'Unknown'];
   // Define local fallback for allIncomes (should be defined in index.html) 
   const allIncomesGlobal = typeof window !== 'undefined' && window.allIncomes ? window.allIncomes : allIncomesFallback;
 

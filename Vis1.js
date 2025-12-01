@@ -58,10 +58,10 @@ function mapResponseCodeToLabel(code) {
 //Offset each party such that they have their own quadrant of the a grid cell
 function getPartyOffset(partyName) {
     switch (partyName) {
-        case "Republican": return { dx: -PARTY_OFFSET_AMOUNT / 2.5, dy: -PARTY_OFFSET_AMOUNT };
-        case "Democrat": return { dx: PARTY_OFFSET_AMOUNT / 2.5, dy: PARTY_OFFSET_AMOUNT };
-        case "Independent": return { dx: PARTY_OFFSET_AMOUNT / 2.5, dy: -PARTY_OFFSET_AMOUNT };
-        case "Other": return { dx: -PARTY_OFFSET_AMOUNT / 2.5, dy: PARTY_OFFSET_AMOUNT };
+        case "Republican": return { dx: -PARTY_OFFSET_AMOUNT / 2, dy: -PARTY_OFFSET_AMOUNT };
+        case "Democrat": return { dx: PARTY_OFFSET_AMOUNT / 2, dy: PARTY_OFFSET_AMOUNT };
+        case "Independent": return { dx: PARTY_OFFSET_AMOUNT / 2, dy: -PARTY_OFFSET_AMOUNT };
+        case "Other": return { dx: -PARTY_OFFSET_AMOUNT / 2, dy: PARTY_OFFSET_AMOUNT };
         default: return { dx: 0, dy: 0 };
     }
 }
@@ -232,8 +232,8 @@ function updateChart(rawData) {
 
     // Force simulation 
     const simulation = d3.forceSimulation(nodes)
-        .force('x', d3.forceX(d => d.targetX).strength(0.025))
-        .force('y', d3.forceY(d => d.targetY).strength(0.05))
+        .force('x', d3.forceX(d => d.targetX).strength(0.006125))
+        .force('y', d3.forceY(d => d.targetY).strength(0.0125))
         .force('collide', d3.forceCollide(radius * 2))
         .force('repel', d3.forceManyBody().strength(-0.03))
         .alpha(1)
