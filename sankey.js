@@ -17,22 +17,7 @@ function renderSankey(containerSelector = '#chart-sankey') {
   const svg = container.append('svg').attr('width', width).attr('height', height);
 
   function mapParty(code) { switch (+code) { case 1: return 'Republican'; case 2: return 'Democrat'; case 3: return 'Independent'; default: return 'Other'; } }
-  function mapRace(code) { switch (+code) { case 1: return 'White'; case 2: return 'Black'; case 3: return 'Asian'; case 4: return 'Mixed'; default: return 'Other'; } }
-  // Use global mapInc if available, otherwise define fallback
-  const mapInc = typeof window.mapInc === 'function' ? window.mapInc : function(code) {
-    const v = +code;
-    if (v === 100) return '$30k - $50k';
-    if (v === 200) return '$50k - $100k';
-    if (v === 300) return '$100k - $150k';
-    if (v === 400) return '$150k+';
-    if (v === 1 || v === 2) return '$30k - $50k';
-    if (v === 3 || v === 4) return '$50k - $100k';
-    if (v === 5 || v === 6) return '$100k - $150k';
-    return 'Unknown';
-  };
-  // Use global mapEdu if available, otherwise define fallback
-  const mapEdu = typeof window.mapEdu === 'function' ? window.mapEdu : function(code) { switch (+code) { case 1: return 'High School <'; case 2: return 'Associates <'; case 3: return 'Bachelor'; case 4: return 'Masters +'; default: return 'Unknown'; } };
-
+ 
 
   if (typeof d3.sankey !== 'function' || typeof d3.sankeyLinkHorizontal !== 'function') {
       const msg = 'd3-sankey is not available. Make sure the d3-sankey script is included before sankey.js';

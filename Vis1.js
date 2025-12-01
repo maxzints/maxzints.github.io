@@ -28,7 +28,6 @@ d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
 
 });
 
-
 const questionColumns = [
     { id: "CHNG_A", label: "A growing population of immigrants" },
     { id: "CHNG_B", label: "More women in the workforce" },
@@ -74,7 +73,6 @@ function processAndPivotData(rawData, xScale, yScale) {
     rawData.forEach(d => {
         const respondentID = d['P_SUID'];
         const partyCode = +d[Party_ID];
-        // NEW: Pull income and education codes
         const incCode = d['INC_SDT1'];
         const eduCode = d['EDUCREC'];
 
