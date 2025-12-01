@@ -7,7 +7,7 @@ const dimensions = {
 const width = dimensions.width - dimensions.margin.left - dimensions.margin.right;
 const height = dimensions.height - dimensions.margin.top - dimensions.margin.bottom;
 const radius = 1.5; // Radius of each mark
-const PARTY_OFFSET_AMOUNT = 0.25; // Controls how far off-center each party is pulled (0.0 to 0.5)
+const PARTY_OFFSET_AMOUNT = 0.3; // Controls how far off-center each party is pulled (0.0 to 0.5)
 
 // Cache processed/pivoted data per question to avoid repeated work
 const processedCache = new Map();
@@ -232,8 +232,8 @@ function updateChart(rawData) {
 
     // Force simulation 
     const simulation = d3.forceSimulation(nodes)
-        .force('x', d3.forceX(d => d.targetX).strength(0.006125))
-        .force('y', d3.forceY(d => d.targetY).strength(0.0125))
+        .force('x', d3.forceX(d => d.targetX).strength(0.0075))
+        .force('y', d3.forceY(d => d.targetY).strength(0.015))
         .force('collide', d3.forceCollide(radius * 2))
         .force('repel', d3.forceManyBody().strength(-0.03))
         .alpha(1)

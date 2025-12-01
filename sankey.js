@@ -31,19 +31,21 @@ function renderSankey(containerSelector = '#chart-sankey') {
       return;
     }
   
-  const allIncomesFallback = ['<$30k', '$30k - $50k', '$50k - $100k', '$100k - $150k', '$>150k', 'Unknown'];
+ const allIncomesFallback = ['<$30k', '$30k - $50k', '$50k - $100k', '$100k - $150k', '$>150k', 'Unknown'];
   // Define local fallback for allIncomes (should be defined in index.html) 
   const allIncomesGlobal = typeof window !== 'undefined' && window.allIncomes ? window.allIncomes : allIncomesFallback;
+  
+  // DEFINE THE DESIRED INCOME ORDER (FORCED ORDERING)
+  const INCOME_ORDER = ['<$30k', '$30k - $50k', '$50k - $100k', '$100k - $150k', '$>150k', 'Unknown'];
+  // Create a map for quick lookup of the desired index
+  const INCOME_ORDER_MAP = new Map(INCOME_ORDER.map((name, i) => [name, i]));
 
-
-  // --- Helper Function to Build and Layout Sankey Graph (Uses ALL relevant data for structure) ---
   function buildSankeyGraph(data, isHighlightOverlay = false) {
     const nodes = [];
     const nodeIndex = new Map();
     function ensureNode(key, displayName) {
       if (!nodeIndex.has(key)) {
         nodeIndex.set(key, nodes.length);
-        // Add a 'type' property to distinguish Party from Income
         const type = key.startsWith('P:') ? 'Party' : 'Income'; 
         nodes.push({ name: displayName, type: type });
       }
@@ -52,11 +54,9 @@ function renderSankey(containerSelector = '#chart-sankey') {
     
     const partyInc = new Map();
     data.forEach(d => {
-      // Use helper functions to map codes to names
       const p = mapParty(d['PARTY']);
       const inc = mapInc(d['INC_SDT1']);
       
-      // Skip if mapping failed (e.g., if code is invalid)
       if (!p || !inc) return; 
       
       const key = p + '||' + inc;
@@ -71,20 +71,35 @@ function renderSankey(containerSelector = '#chart-sankey') {
       links.push({ source: src, target: tgt, value: v });
     }
 
+    //Sort nodes based on INCOME_ORDER_MAP
+
+    // Create the graph object
+    const graph = { nodes: nodes.map(d => Object.assign({}, d)), links: links.map(d => Object.assign({}, d)) };
+    
     const sankeyGen = d3.sankey()
       .nodeWidth(18)
       .nodePadding(10)
-      .extent([[1, 1], [width - 1, height - (isHighlightOverlay ? 1 : 6)]]); 
+      .extent([[1, 1], [width - 1, height - (isHighlightOverlay ? 1 : 6)]])
+      // CRITICAL FIX: Add a custom node sort function
+      .nodeSort((a, b) => {
+          // Only sort Income nodes (the nodes on the right)
+          if (a.type === 'Income' && b.type === 'Income') {
+              const aIndex = INCOME_ORDER_MAP.get(a.name) !== undefined ? INCOME_ORDER_MAP.get(a.name) : Infinity;
+              const bIndex = INCOME_ORDER_MAP.get(b.name) !== undefined ? INCOME_ORDER_MAP.get(b.name) : Infinity;
+              return aIndex - bIndex;
+          }
+          // Let D3 Sankey handle the sorting/positioning for Party nodes (the nodes on the left)
+          return null; 
+      });
 
-    const graph = { nodes: nodes.map(d => Object.assign({}, d)), links: links.map(d => Object.assign({}, d)) };
     try {
       sankeyGen(graph);
     } catch (err) {
       console.error('sankey: sankeyGen failed', err);
       d3.select('#sankey-error').text('Failed to layout sankey: ' + err.message);
       return { graph: null, color: null };
-    }
-    
+    } 
+
     // Define Colors
     const partyColors = ["#76b7b2ff", "#e15759", "#f28e2c", "#59a14f"];
     const partyDomains = ["Democrat", "Republican", "Independent", "Other"];  
@@ -96,10 +111,9 @@ function renderSankey(containerSelector = '#chart-sankey') {
       
     // Return both the scale and the neutral income color
     return { graph, colorScale, INCOME_COLOR };
-  }
-  // --- End Helper Function ---
+  } 
     
-  // --- FIX: Use global data if available, otherwise load from file ---
+  //  Use global data if available, otherwise load from file 
   const loadData = () => {
       if (typeof window !== 'undefined' && window.rlsData) {
           return Promise.resolve(window.rlsData); 
