@@ -16,22 +16,12 @@ function renderSankey(containerSelector = '#chart-sankey') {
   
   const svg = container.append('svg').attr('width', width).attr('height', height);
 
+  // --- Centralized Utilities Reference (Removed local fallbacks) ---
   function mapParty(code) { switch (+code) { case 1: return 'Republican'; case 2: return 'Democrat'; case 3: return 'Independent'; default: return 'Other'; } }
-  function mapRace(code) { switch (+code) { case 1: return 'White'; case 2: return 'Black'; case 3: return 'Asian'; case 4: return 'Mixed'; default: return 'Other'; } }
-  // Use global mapInc if available, otherwise define fallback
-  const mapInc = typeof window.mapInc === 'function' ? window.mapInc : function(code) {
-    const v = +code;
-    if (v === 100) return '$30k - $50k';
-    if (v === 200) return '$50k - $100k';
-    if (v === 300) return '$100k - $150k';
-    if (v === 400) return '$150k+';
-    if (v === 1 || v === 2) return '$30k - $50k';
-    if (v === 3 || v === 4) return '$50k - $100k';
-    if (v === 5 || v === 6) return '$100k - $150k';
-    return 'Unknown';
-  };
-  // Use global mapEdu if available, otherwise define fallback
-  const mapEdu = typeof window.mapEdu === 'function' ? window.mapEdu : function(code) { switch (+code) { case 1: return 'High School <'; case 2: return 'Associates <'; case 3: return 'Bachelor'; case 4: return 'Masters +'; default: return 'Unknown'; } };
+  // Rely on window.mapInc and window.mapEdu defined in index.html
+  const mapInc = typeof window.mapInc === 'function' ? window.mapInc : function() { return 'Unknown'; };
+  const mapEdu = typeof window.mapEdu === 'function' ? window.mapEdu : function() { return 'Unknown'; };
+  // --- END Utilities Reference ---
 
 
   if (typeof d3.sankey !== 'function' || typeof d3.sankeyLinkHorizontal !== 'function') {
@@ -41,12 +31,12 @@ function renderSankey(containerSelector = '#chart-sankey') {
       return;
     }
   
-  // Define local fallback for allIncomes (should be defined in index.html)
-  const allIncomesFallback = ['$30k - $50k', '$50k - $100k', '$100k - $150k', '$150k+', 'Unknown'];
+  const allIncomesFallback = ['<$30k', '$30k - $50k', '$50k - $100k', '$100k - $150k', '$>150k', 'Unknown'];
+  // Define local fallback for allIncomes (should be defined in index.html) 
   const allIncomesGlobal = typeof window !== 'undefined' && window.allIncomes ? window.allIncomes : allIncomesFallback;
 
 
-  // --- Helper Function to Build and Layout Sankey Graph (Modified) ---
+  // --- Helper Function to Build and Layout Sankey Graph (Uses ALL relevant data for structure) ---
   function buildSankeyGraph(data, isHighlightOverlay = false) {
     const nodes = [];
     const nodeIndex = new Map();
@@ -62,8 +52,13 @@ function renderSankey(containerSelector = '#chart-sankey') {
     
     const partyInc = new Map();
     data.forEach(d => {
+      // Use helper functions to map codes to names
       const p = mapParty(d['PARTY']);
       const inc = mapInc(d['INC_SDT1']);
+      
+      // Skip if mapping failed (e.g., if code is invalid)
+      if (!p || !inc) return; 
+      
       const key = p + '||' + inc;
       partyInc.set(key, (partyInc.get(key) || 0) + 1);
     });
@@ -115,35 +110,46 @@ function renderSankey(containerSelector = '#chart-sankey') {
   loadData().then(data => {
   // --- END FIX ---
   
-    // 1. Apply All Filters (Party + Income/Edu Filters)
-    const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
-    const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
-    
-    // Retrieve global filter state
-    const activeIncomes = typeof window !== 'undefined' && window.activeIncomes ? window.activeIncomes : new Set(allIncomesGlobal);
-    
-    const allEdus = typeof window !== 'undefined' && window.allEdus ? window.allEdus : ['High School <', 'Associates <', 'Bachelor', 'Masters +', 'Unknown'];
-    const activeEdus = typeof window !== 'undefined' && window.activeEdus ? window.activeEdus : new Set(allEdus);
-    
-    const fullFilteredData = data.filter(d => 
-        activeParties.has(mapParty(d.PARTY)) &&
-        activeIncomes.has(mapInc(d.INC_SDT1)) &&
-        activeEdus.has(mapEdu(d.EDUCREC))
-    );
+    // 1. **REWORKED:** Use ALL RAW DATA for the base calculation
+    const allRawData = data;
 
-    // 2. Determine Opacity
-    const isHighlighting = typeof window !== 'undefined' && window.highlightedID !== null;
-    const baseOpacity = isHighlighting ? 0.2 : 1.0;
-
-    // 3. Build Full Sankey Graph
-    const { graph, colorScale, INCOME_COLOR } = buildSankeyGraph(fullFilteredData);
+    // 2. Get the full graph based on ALL data for structure and size
+    const { graph, colorScale, INCOME_COLOR } = buildSankeyGraph(allRawData);
 
     if (!graph) return;
+    
+    // 3. Define the filter checker function
+    const isNodeActive = (d) => {
+        const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
+        const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
+        const activeIncomes = typeof window !== 'undefined' && window.activeIncomes ? window.activeIncomes : new Set(allIncomesGlobal);
+        // NOTE: The Sankey doesn't visualize Education, so we only check Party and Income.
+
+        // A node is active if its name (Party or Income) is in the active filter set.
+        if (d.type === 'Party') {
+            return activeParties.has(d.name);
+        } else if (d.type === 'Income') {
+            return activeIncomes.has(d.name);
+        }
+        return false; // Should not happen for a top-level node
+    };
+    
+    // 4. Define the link filter checker function
+    const isLinkActive = (d) => {
+        // A link is active only if BOTH its source (Party) and target (Income) nodes are active.
+        return isNodeActive(d.source) && isNodeActive(d.target);
+    };
+
+    // 5. Determine Opacity (Base Opacity logic remains the same for highlighting)
+    const isHighlighting = typeof window !== 'undefined' && window.highlightedID !== null;
+    const GHOST_OPACITY = 0.1; 
+    const ACTIVE_OPACITY = 1.0; 
+    const HIGHLIGHT_GHOST_OPACITY = 0.2; // Opacity when a single respondent is highlighted
 
     // Helper to get color based on node type
     const getNodeColor = (d) => d.type === 'Income' ? INCOME_COLOR : colorScale(d.name);
 
-    // 4. Draw Links (Base Layer)
+    // 6. Draw Links (Base Layer) - Apply Ghosting
     svg.append('g')
       .attr('fill', 'none')
       .attr('class', 'base-links')
@@ -158,7 +164,12 @@ function renderSankey(containerSelector = '#chart-sankey') {
       })
       .attr('stroke-width', d => Math.max(1, d.width))
       .attr('class', 'link')
-      .style('opacity', baseOpacity) 
+      .style('opacity', d => {
+        if (isHighlighting) {
+            return HIGHLIGHT_GHOST_OPACITY; // If highlighted, base links are always dimmed
+        }
+        return isLinkActive(d) ? ACTIVE_OPACITY : GHOST_OPACITY; // Apply filter ghosting
+      })
       .append('title')
       .text(d => {
         const s = d.source && d.source.name ? d.source.name : (typeof d.source === 'number' ? (graph.nodes[d.source] && graph.nodes[d.source].name) : '');
@@ -166,7 +177,7 @@ function renderSankey(containerSelector = '#chart-sankey') {
         return `${s} → ${t}: ${d.value}`;
       });
 
-    // 5. Draw Nodes (Base Layer) - ADD CORRECTED CLICK HANDLER
+    // 7. Draw Nodes (Base Layer) - Apply Ghosting & Click Handler
     const node = svg.append('g')
       .attr('class', 'base-nodes')
       .selectAll('.node')
@@ -174,13 +185,12 @@ function renderSankey(containerSelector = '#chart-sankey') {
       .enter().append('g')
       .attr('class', 'node')
       .attr('transform', d => `translate(${d.x0},${d.y0})`)
-      // Setting cursor pointer to indicate interactivity
       .style('cursor', d => d.type === 'Income' ? 'pointer' : 'default')
       
-      // NEW CLICK HANDLER WITH CORRECTED LOGIC
+      // NEW CLICK HANDLER WITH CORRECTED LOGIC (Relies on mapInc)
       .on('click', function(event, d) {
         // Only allow filtering on Income nodes (nodes on the right side)
-        if (d.type !== 'Income' || typeof window.updateAllCharts !== 'function') return;
+        if (d.type !== 'Income' || typeof window.updateAllCharts !== 'function' || !window.activeIncomes) return;
         
         const clickedIncome = d.name;
         // Use the list structure to easily check if ALL were selected
@@ -208,9 +218,14 @@ function renderSankey(containerSelector = '#chart-sankey') {
     node.append('rect')
       .attr('height', d => Math.max(1, d.y1 - d.y0))
       .attr('width', d => d.x1 - d.x0)
-      .attr('fill', getNodeColor) // Use helper function to color Income nodes differently
+      .attr('fill', getNodeColor)
       .attr('stroke', '#000')
-      .style('opacity', baseOpacity) 
+      .style('opacity', d => {
+        if (isHighlighting) {
+             return HIGHLIGHT_GHOST_OPACITY; // If highlighted, base nodes are always dimmed
+        }
+        return isNodeActive(d) ? ACTIVE_OPACITY : GHOST_OPACITY; // Apply filter ghosting
+      }) 
       .append('title')
       .text(d => `${d.name}: ${d.value || d.value === 0 ? d.value : ''}`);
 
@@ -221,74 +236,64 @@ function renderSankey(containerSelector = '#chart-sankey') {
       .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
       .text(d => d.name)
       .style('font-size', '12px')
-      .style('opacity', isHighlighting ? 1.0 : 0.9); 
-
-    // --- 6. Highlighted Overlay (New Logic) ---
+      .style('opacity', 1.0); // Text should always be legible (no ghosting)
+      
+    // --- 8. Highlighted Overlay ---
     if (isHighlighting) {
         const highlightedID = window.highlightedID;
         
-        // Debug check (from previous step)
         if (!highlightedID) {
             console.log('Sankey: Highlighted ID is null/undefined, skipping overlay.');
             return;
         }
 
-        // Filter raw data using 'P_SUID' 
-        const highlightedData = fullFilteredData.filter(d => {
+        // Filter raw data using 'P_SUID' (must use the full loaded dataset)
+        const highlightedData = allRawData.filter(d => {
             const dataID = String(d.P_SUID).trim();
             const stateID = String(highlightedID).trim();
             return dataID === stateID; 
         }); 
 
-        // Add a debug check here to see if the filter succeeded
-        console.log(`Sankey: Filtered to highlight ${highlightedData.length} respondent(s) for ID ${highlightedID}`);
+        // Rerun aggregation and layout only for the highlighted respondent
+        const { graph: highlightedGraph, colorScale: hColorScale, INCOME_COLOR: hINCOME_COLOR } = buildSankeyGraph(highlightedData, true);
 
+        if (!highlightedGraph) return;
 
-        if (highlightedData.length > 0) {
-            // Re-run aggregation and layout only for the highlighted respondent
-            const { graph: highlightedGraph, colorScale: hColorScale, INCOME_COLOR: hINCOME_COLOR } = buildSankeyGraph(highlightedData, true);
+        // Draw Highlighted Links (Overlay)
+        svg.append('g')
+          .attr('fill', 'none')
+          .attr('class', 'highlight-links')
+          .selectAll('path')
+          .data(highlightedGraph.links)
+          .enter().append('path')
+          .attr('d', d3.sankeyLinkHorizontal())
+          .attr('stroke', d => {
+            const sname = d.source && d.source.name ? d.source.name : (typeof d.source === 'number' ? (highlightedGraph.nodes[d.source] && graph.nodes[d.source].name) : '');
+            return colorScale(sname);
+          })
+          .attr('stroke-width', 5) 
+          .attr('class', 'highlight-link')
+          .style('opacity', 1.0) 
+          .attr('stroke-linejoin', 'round')
+          .attr('stroke-linecap', 'round');
+          
+         // Draw Highlighted Nodes (Overlay)
+        const hNode = svg.append('g')
+          .attr('class', 'highlight-nodes')
+          .selectAll('.node-h')
+          .data(highlightedGraph.nodes)
+          .enter().append('g')
+          .attr('class', 'node-h')
+          // Use coordinates from the highlighted graph layout
+          .attr('transform', d => `translate(${d.x0},${d.y0})`);
 
-            if (!highlightedGraph) return;
-
-            const getHighlightNodeColor = (d) => d.type === 'Income' ? hINCOME_COLOR : hColorScale(d.name);
-            
-            // Draw Highlighted Links (Overlay)
-            svg.append('g')
-              .attr('fill', 'none')
-              .attr('class', 'highlight-links')
-              .selectAll('path')
-              .data(highlightedGraph.links)
-              .enter().append('path')
-              .attr('d', d3.sankeyLinkHorizontal())
-              .attr('stroke', d => {
-                // Links get the color of their source node (Party)
-                const sname = d.source && d.source.name ? d.source.name : (typeof d.source === 'number' ? (highlightedGraph.nodes[d.source] && graph.nodes[d.source].name) : '');
-                return colorScale(sname); // Use base color scale for consistency
-              })
-              // Fixed width for clear visibility
-              .attr('stroke-width', 5) 
-              .attr('class', 'highlight-link')
-              .style('opacity', 1.0) 
-              .attr('stroke-linejoin', 'round')
-              .attr('stroke-linecap', 'round');
-              
-             // Draw Highlighted Nodes (Overlay) - MODIFIED COLOR LOGIC
-            const hNode = svg.append('g')
-              .attr('class', 'highlight-nodes')
-              .selectAll('.node-h')
-              .data(highlightedGraph.nodes)
-              .enter().append('g')
-              .attr('class', 'node-h')
-              .attr('transform', d => `translate(${d.x0},${d.y0})`);
-
-            hNode.append('rect')
-              .attr('height', d => Math.max(1, d.y1 - d.y0))
-              .attr('width', d => d.x1 - d.x0)
-              .attr('fill', getHighlightNodeColor) // Use helper function to color Income nodes differently
-              .attr('stroke', '#000')
-              .attr('stroke-width', 2)
-              .style('opacity', 1.0);
-        }
+        hNode.append('rect')
+          .attr('height', d => Math.max(1, d.y1 - d.y0))
+          .attr('width', d => d.x1 - d.x0)
+          .attr('fill', d => d.type === 'Income' ? hINCOME_COLOR : hColorScale(d.name))
+          .attr('stroke', '#000')
+          .attr('stroke-width', 2)
+          .style('opacity', 1.0);
     }
 
   }).catch(err => {

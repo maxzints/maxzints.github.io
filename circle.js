@@ -24,22 +24,8 @@ function renderCircle(containerSelector = '#chart-circle') {
   const tooltip = d3.select('#tooltip');
 
   function mapParty(code) { switch (+code) { case 1: return 'Republican'; case 2: return 'Democrat'; case 3: return 'Independent'; default: return 'Other'; } }
-  // Use global mapEdu if available, otherwise define fallback
-  const mapEdu = typeof window.mapEdu === 'function' ? window.mapEdu : function(code) { switch (+code) { case 1: return 'High School <'; case 2: return 'Associates <'; case 3: return 'Bachelor'; case 4: return 'Masters +'; default: return 'Unknown'; } };
-  // Use global mapInc if available, otherwise define fallback
-  const mapInc = typeof window.mapInc === 'function' ? window.mapInc : function(code) {
-    const v = +code;
-    if (v === 100) return '$30k - $50k';
-    if (v === 200) return '$50k - $100k';
-    if (v === 300) return '$100k - $150k';
-    if (v === 400) return '$150k+';
-    if (v === 1 || v === 2) return '$30k - $50k';
-    if (v === 3 || v === 4) return '$50k - $100k';
-    if (v === 5 || v === 6) return '$100k - $150k';
-    return 'Unknown';
-  };
   
-  // Define local fallback for allEdus (should be defined in index.html)
+  // Define local Edus (should be defined in index.html)
   const allEdusFallback = ['High School <', 'Associates <', 'Bachelor', 'Masters +', 'Unknown'];
   const allEdusGlobal = typeof window !== 'undefined' && window.allEdus ? window.allEdus : allEdusFallback;
 
@@ -52,29 +38,22 @@ function renderCircle(containerSelector = '#chart-circle') {
     return d3.csv('ScrubbedRLSDataFile.csv'); // Fallback to async load
   };
 
-  loadData().then(data => {
-    // --- END FIX ---
-
-    // 1. Apply All Filters (Party + Income/Edu Filters)
+loadData().then(data => {
+    // 1. **REWORKED:** USE ALL RAW DATA for the base calculation
+    const allRawData = data;
+    
+    // 2. Define Filters
     const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
     const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
-    
-    // Retrieve global filter state
-    const allIncomes = typeof window !== 'undefined' && window.allIncomes ? window.allIncomes : ['$30k - $50k', '$50k - $100k', '$100k - $150k', '$150k+', 'Unknown'];
+    const allIncomes = typeof window !== 'undefined' && window.allIncomes ? window.allIncomes : ['<$30k','$30k - $50k', '$50k - $100k', '$100k - $150k', '>$150k', 'Unknown'];
     const activeIncomes = typeof window !== 'undefined' && window.activeIncomes ? window.activeIncomes : new Set(allIncomes);
-    
+    const allEdusGlobal = typeof window !== 'undefined' && window.allEdus ? window.allEdus : allEdusFallback;
     const activeEdus = typeof window !== 'undefined' && window.activeEdus ? window.activeEdus : new Set(allEdusGlobal);
     
-    const filteredData = data.filter(d => 
-        activeParties.has(mapParty(d.PARTY)) &&
-        activeIncomes.has(mapInc(d.INC_SDT1)) &&
-        activeEdus.has(mapEdu(d.EDUCREC))
-    );
+    // 3. **REWORKED:** Build nested counts on ALL data
+    const nested = d3.rollups(allRawData, v => v.length, d => mapParty(d.PARTY), d => mapEdu(d.EDUCREC));
 
-    // build nested counts: party -> edu -> count
-    const nested = d3.rollups(filteredData, v => v.length, d => mapParty(d.PARTY), d => mapEdu(d.EDUCREC));
-
-    // convert to hierarchy format
+    // convert to hierarchy format (REMAINS THE SAME)
     const root = {
       name: 'root', children: nested.map(([party, eduArr]) => ({
         name: party,

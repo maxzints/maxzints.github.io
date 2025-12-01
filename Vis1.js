@@ -6,7 +6,7 @@ const dimensions = {
 }
 const width = dimensions.width - dimensions.margin.left - dimensions.margin.right;
 const height = dimensions.height - dimensions.margin.top - dimensions.margin.bottom;
-const radius = 1; // Radius of each mark
+const radius = 1.5; // Radius of each mark
 const PARTY_OFFSET_AMOUNT = 0.25; // Controls how far off-center each party is pulled (0.0 to 0.5)
 
 // Cache processed/pivoted data per question to avoid repeated work
@@ -16,7 +16,7 @@ window.highlightedID = null;
 
 d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
 
-    const subsampledData = rawData.filter((d, i) => i % 3 === 0); 
+    const subsampledData = rawData.filter((d, i) => i % 3 === 0);
     window.rlsData = subsampledData; // Store the subsampled data globally  
 
     // Call the universal update for initial filter state 
@@ -27,7 +27,6 @@ d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
     }
 
 });
-
 
 const questionColumns = [
     { id: "CHNG_A", label: "A growing population of immigrants" },
@@ -59,10 +58,10 @@ function mapResponseCodeToLabel(code) {
 //Offset each party such that they have their own quadrant of the a grid cell
 function getPartyOffset(partyName) {
     switch (partyName) {
-        case "Republican": return { dx: -PARTY_OFFSET_AMOUNT / 1.2, dy: -PARTY_OFFSET_AMOUNT };
-        case "Democrat": return { dx: PARTY_OFFSET_AMOUNT / 1.2, dy: PARTY_OFFSET_AMOUNT };
-        case "Independent": return { dx: PARTY_OFFSET_AMOUNT / 1.2, dy: -PARTY_OFFSET_AMOUNT };
-        case "Other": return { dx: -PARTY_OFFSET_AMOUNT / 1.2, dy: PARTY_OFFSET_AMOUNT };
+        case "Republican": return { dx: -PARTY_OFFSET_AMOUNT / 2, dy: -PARTY_OFFSET_AMOUNT };
+        case "Democrat": return { dx: PARTY_OFFSET_AMOUNT / 2, dy: PARTY_OFFSET_AMOUNT };
+        case "Independent": return { dx: PARTY_OFFSET_AMOUNT / 2, dy: -PARTY_OFFSET_AMOUNT };
+        case "Other": return { dx: -PARTY_OFFSET_AMOUNT / 2, dy: PARTY_OFFSET_AMOUNT };
         default: return { dx: 0, dy: 0 };
     }
 }
@@ -74,10 +73,9 @@ function processAndPivotData(rawData, xScale, yScale) {
     rawData.forEach(d => {
         const respondentID = d['P_SUID'];
         const partyCode = +d[Party_ID];
-        // NEW: Pull income and education codes
         const incCode = d['INC_SDT1'];
         const eduCode = d['EDUCREC'];
-        
+
         if (!(partyCode >= 1)) return; // skip invalid party
 
         const partyName = mapPartyCode(partyCode);
@@ -170,22 +168,6 @@ function updateChart(rawData) {
         processedCache.set(cacheKey, nodes);
     }
 
-    // Filter Nodes based on the global state
-    const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
-    // NEW: Get Income/Edu Filters (using global map functions)
-    const allIncomes = ['$30k - $50k', '$50k - $100k', '$100k - $150k', '$150k+', 'Unknown']; // Defined in index.html for consistency
-    const activeIncomes = typeof window !== 'undefined' && window.activeIncomes ? window.activeIncomes : new Set(allIncomes);
-    const allEdus = ['High School <', 'Associates <', 'Bachelor', 'Masters +', 'Unknown']; // Defined in index.html for consistency
-    const activeEdus = typeof window !== 'undefined' && window.activeEdus ? window.activeEdus : new Set(allEdus);
-
-    const filteredNodes = nodes.filter(d => 
-        activeParties.has(d.partyName) &&
-        // NEW: Apply income and education filters using the codes stored in the node
-        (typeof mapInc === 'function' ? activeIncomes.has(mapInc(d.incCode)) : true) &&
-        (typeof mapEdu === 'function' ? activeEdus.has(mapEdu(d.eduCode)) : true)
-    );
-
-
     //CANVAS CREATION 
     const canvasElement = container
         .append('canvas')
@@ -249,10 +231,10 @@ function updateChart(rawData) {
     });
 
     // Force simulation 
-    const simulation = d3.forceSimulation(filteredNodes)
-        .force('x', d3.forceX(d => d.targetX).strength(0.025))
-        .force('y', d3.forceY(d => d.targetY).strength(0.05))
-        .force('collide', d3.forceCollide(radius * 3))
+    const simulation = d3.forceSimulation(nodes)
+        .force('x', d3.forceX(d => d.targetX).strength(0.006125))
+        .force('y', d3.forceY(d => d.targetY).strength(0.0125))
+        .force('collide', d3.forceCollide(radius * 2))
         .force('repel', d3.forceManyBody().strength(-0.03))
         .alpha(1)
         .alphaDecay(0.02);
@@ -263,26 +245,43 @@ function updateChart(rawData) {
         ctx.clearRect(0, 0, totalWidth, totalHeight);
         ctx.save();
         ctx.translate(dimensions.margin.left, dimensions.margin.top);
+        // Filter Nodes based on the global state
+
+        const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
+        // NEW: Get Income/Edu Filters (using global map functions)
+        const allIncomes = ['<$30k','$30k - $50k', '$50k - $100k', '$100k - $150k', '>$150k', 'Unknown']; // Defined in index.html for consistency
+        const activeIncomes = typeof window !== 'undefined' && window.activeIncomes ? window.activeIncomes : new Set(allIncomes);
+        const allEdus = ['High School <', 'Associates <', 'Bachelor', 'Masters +', 'Unknown']; // Defined in index.html for consistency
+        const activeEdus = typeof window !== 'undefined' && window.activeEdus ? window.activeEdus : new Set(allEdus);
 
         const nodesToDraw = simulation.nodes();
 
         for (let i = 0; i < nodesToDraw.length; i++) {
             const d = nodesToDraw[i];
-
-            // Highlighting Logic
+            const isPartyActive = activeParties.has(d.partyName);
+            const isIncActive = (typeof mapInc === 'function' ? activeIncomes.has(mapInc(d.incCode)) : true);
+            const isEduActive = (typeof mapEdu === 'function' ? activeEdus.has(mapEdu(d.eduCode)) : true);
+            
+            const isActive = isPartyActive && isIncActive && isEduActive;  // Highlighting Logic
             let currentRadius = radius;
             let currentAlpha = 0.9;
             let strokeColor = null;
 
-            if (highlightedID !== null) {
-                if (d.id === highlightedID) {
-                    currentAlpha = 1.0;
-                    currentRadius = radius * 2;
-                    strokeColor = '#000000';
-                } else {
-                    currentAlpha = 0.1;
-                }
+            if (window.highlightedID !== null) {
+            if (d.id === highlightedID) {
+                currentAlpha = 1.0;
+                currentRadius = radius * 2;
+                strokeColor = '#000000';
+            } else {
+                currentAlpha = 0.1; 
             }
+        } else {
+            if (!isActive) {
+                currentAlpha = 0.1; 
+            } else {
+                currentAlpha = 0.9;
+            }
+        }
 
             ctx.beginPath();
             ctx.arc(d.x, d.y, currentRadius, 0, Math.PI * 2);

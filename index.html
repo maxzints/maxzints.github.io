@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <title>Data Visualization Project Plot</title>
     <style>
-        
         body {
             margin: 0;
             overflow-x: hidden;
@@ -13,14 +13,19 @@
             display: flex;
             flex-direction: column;
         }
+
         /* Styling for the grid lines */
-        .x-axis line, .y-axis line {
+        .x-axis line,
+        .y-axis line {
             stroke: #ccc;
-            stroke-dasharray: 2,2;
+            stroke-dasharray: 2, 2;
         }
-        .x-axis .domain, .y-axis .domain {
+
+        .x-axis .domain,
+        .y-axis .domain {
             stroke: none;
         }
+
         /* Container styles */
         .chart-container {
             position: relative;
@@ -28,6 +33,7 @@
             width: 100%;
             height: 100%;
         }
+
         /* New dashboard structure using flexbox for top/bottom split */
         .dashboard {
             display: flex;
@@ -35,6 +41,7 @@
             width: 100%;
             height: 100%;
         }
+
         /* Top half container (Vis1) */
         .dash-top {
             flex: 2;
@@ -42,6 +49,7 @@
             padding: 10px;
             box-sizing: border-box;
         }
+
         /* Bottom half container (Sankey and Circle) */
         .dash-bottom {
             flex: 1;
@@ -50,6 +58,7 @@
             padding: 10px;
             box-sizing: border-box;
         }
+
         /* Item within the bottom half (Sankey/Circle) */
         .chart-item {
             flex: 1;
@@ -57,16 +66,13 @@
             height: 100%;
         }
 
-        /* Remove margin from first and last chart-item (revising original logic) */
-        .dash-bottom .chart-item:first-child { margin-left: 0; }
-        .dash-bottom .chart-item:last-child { margin-right: 0; }
-
         /* Sankey Diagram (75% of bottom width) */
         #chart-sankey {
-            flex: 15 1 0%; 
+            flex: 15 1 0%;
             margin-left: 0;
-            margin-right: 20px; 
+            margin-right: 20px;
         }
+
         /* Circle Diagram (15% of bottom width) */
         #chart-circle {
             flex: 3 1 0%;
@@ -78,7 +84,7 @@
         #global-legend {
             flex: 2 1 0%;
             height: 100%;
-            padding: 10px; 
+            padding: 10px;
             box-sizing: border-box;
             margin-left: 0;
             margin-right: 0;
@@ -86,46 +92,25 @@
 
         /* Legend Specific Styles for better alignment (These make the colors visible) */
         .legend-item {
-            display: flex; /* Aligns swatch and text horizontally */
+            display: flex;
+            /* Aligns swatch and text horizontally */
             align-items: center;
             margin-bottom: 5px;
             font-size: 14px;
         }
-        .color-swatch {
-            width: 15px; /* Size of the color square */
-            height: 15px;
-            margin-right: 8px; /* Spacing between color and text */
-            border-radius: 3px;
-            border: 1px solid #ddd; /* A subtle border */
-        }
-        /* General styles (buttons not strictly needed for this layout but kept) */
-        .buttons-container {
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .buttons-container button {
-            padding: 10px 15px;
-            margin: 0 5px;
-            border: 1px solid #ccc;
-            background-color: #f0f0f0;
-            cursor: pointer;
-            font-size: 14px;
-            border-radius: 5px;
-            transition: background-color 0.2s ease, border-color 0.2s ease;
-        }
-        .buttons-container button:hover {
-            background-color: #e0e0e0;
-            border-color: #aaa;
-        }
-        .buttons-container button.active {
-            background-color: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
 
+        .color-swatch {
+            width: 15px;
+            /* Size of the color square */
+            height: 15px;
+            margin-right: 8px;
+            /* Spacing between color and text */
+            border-radius: 3px;
+        }
     </style>
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
+
 <body>
 
     <div class="dashboard">
@@ -148,49 +133,50 @@
 
     <script>
         // --- Utility Functions (Must be global for all charts) ---
-        function mapEdu(code) { 
-            switch (+code) { 
-                case 1: return 'High School <'; 
-                case 2: return 'Associates <'; 
-                case 3: return 'Bachelor'; 
-                case 4: return 'Masters +'; 
-                default: return 'Unknown'; 
-            } 
+        function mapEdu(code) {
+            switch (+code) {
+                case 1: return 'High School <';
+                case 2: return 'Associates <';
+                case 3: return 'Bachelor';
+                case 4: return 'Masters +';
+                default: return 'Unknown';
+            }
         }
         function mapInc(code) {
-            const v = +code;
-            if (v === 100) return '$30k - $50k';
-            if (v === 200) return '$50k - $100k';
-            if (v === 300) return '$100k - $150k';
-            if (v === 400) return '$150k+';
-            if (v === 1 || v === 2) return '$30k - $50k';
-            if (v === 3 || v === 4) return '$50k - $100k';
-            if (v === 5 || v === 6) return '$100k - $150k';
-            return 'Unknown';
+            switch (+code) {
+                case 1: return '<$30k'; // Corrected Label
+                case 2:
+                case 3: return '$30k - $50k';
+                case 4:
+                case 5: return '$50k - $100k';
+                case 6:
+                case 7: return '$100k - $150k';
+                case 8: return '$>150k'; // Corrected Label to match global list
+                default: return 'Unknown';
+            }
         }
-        
+
         // --- Global State to track active filters (initially all) ---
         const allParties = ["Democrat", "Republican", "Independent", "Other"];
         window.activeParties = new Set(allParties);
-        
-        const allIncomes = ['$30k - $50k', '$50k - $100k', '$100k - $150k', '$150k+', 'Unknown'];
+        const allIncomes = ['<$30k', '$30k - $50k', '$50k - $100k', '$100k - $150k', '$>150k', 'Unknown'];
         window.activeIncomes = new Set(allIncomes);
-        
+
         const allEdus = ['High School <', 'Associates <', 'Bachelor', 'Masters +', 'Unknown'];
         window.activeEdus = new Set(allEdus);
-        
+
         window.highlightedID = null;
-        
+
         // --- Universal Update Function for all Charts ---
         function updateAllCharts() {
             // Re-render each chart, applying the current global filters
-            try { 
+            try {
                 if (window.rlsData) {
                     // This function is in Vis1.js and recalculates points based on all global filters
-                    updateChart(window.rlsData); 
+                    updateChart(window.rlsData);
                 }
             } catch (e) { console.error('Failed to update Vis1', e); }
-            
+
             // Re-run Sankey and Circle render functions, which check global filters internally
             try { renderSankey('#chart-sankey'); } catch (e) { console.error('Failed to render sankey', e); }
             try { renderCircle('#chart-circle'); } catch (e) { console.error('Failed to render circle', e); }
@@ -217,25 +203,25 @@
                 .append("div")
                 .attr("class", "legend-item")
                 // --- Add the Click Handler to each legend item ---
-                .on("click", function(event, d) {
+                .on("click", function (event, d) {
                     if (window.activeParties.has(d)) {
                         window.activeParties.delete(d);
                     } else {
                         window.activeParties.add(d);
                     }
-                    
+
                     // Re-add all if all are deselected (optional: keep at least one selected)
                     if (window.activeParties.size === 0) {
                         window.activeParties = new Set(allParties);
                     }
-                    
+
                     // Update the visual state of the legend
                     d3.select(this)
                         .style("opacity", window.activeParties.has(d) ? 1 : 0.5);
-                    
+
                     // Un-highlight any specific respondent
                     window.highlightedID = null;
-                    
+
                     updateAllCharts();
                 })
                 .style("cursor", "pointer"); // Indicate it's clickable
@@ -248,17 +234,18 @@
             // Add the text label
             legendItems.append("span")
                 .text(d => d);
-            
+
             // Initial styling based on the active state
             legendItems.style("opacity", d => window.activeParties.has(d) ? 1 : 0.5);
         }
-        
+
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             renderGlobalLegend('#global-legend');
             // Vis1.js loads data and calls updateAllCharts() when ready.
         });
-         
+
     </script>
 </body>
+
 </html>
