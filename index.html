@@ -127,22 +127,24 @@
             } 
         }
         function mapInc(code) {
-            const v = +code;
-            if (v === 100) return '$30k - $50k';
-            if (v === 200) return '$50k - $100k';
-            if (v === 300) return '$100k - $150k';
-            if (v === 400) return '$150k+';
-            if (v === 1 || v === 2) return '$30k - $50k';
-            if (v === 3 || v === 4) return '$50k - $100k';
-            if (v === 5 || v === 6) return '$100k - $150k';
-            return 'Unknown';
+            switch (+code) { 
+                case 1: return '<$30k'; 
+                case 2: return '$30k - $50k'; 
+                case 3: return '$30k - $50k'; 
+                case 4: return '$50k - $100k'; 
+                case 5: return '$50k - $100k'; 
+                case 6: return '$100k - $150k'; 
+                case 7: return '$100k - $150k'; 
+                case 8: return '$>150k'; 
+                default: return 'Unknown'; 
+            } 
         }
         
         // --- Global State to track active filters (initially all) ---
         const allParties = ["Democrat", "Republican", "Independent", "Other"];
         window.activeParties = new Set(allParties);
-        
-        const allIncomes = ['$30k - $50k', '$50k - $100k', '$100k - $150k', '$150k+', 'Unknown'];
+        // index.html (around line 90)
+        const allIncomes = ['<$30k', '$30k - $50k', '$50k - $100k', '$100k - $150k', '$>150k', 'Unknown'];
         window.activeIncomes = new Set(allIncomes);
         
         const allEdus = ['High School <', 'Associates <', 'Bachelor', 'Masters +', 'Unknown'];

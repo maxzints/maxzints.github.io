@@ -249,7 +249,7 @@ function updateChart(rawData) {
 
         const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
         // NEW: Get Income/Edu Filters (using global map functions)
-        const allIncomes = ['$30k - $50k', '$50k - $100k', '$100k - $150k', '$150k+', 'Unknown']; // Defined in index.html for consistency
+        const allIncomes = ['<$30k','$30k - $50k', '$50k - $100k', '$100k - $150k', '>$150k', 'Unknown']; // Defined in index.html for consistency
         const activeIncomes = typeof window !== 'undefined' && window.activeIncomes ? window.activeIncomes : new Set(allIncomes);
         const allEdus = ['High School <', 'Associates <', 'Bachelor', 'Masters +', 'Unknown']; // Defined in index.html for consistency
         const activeEdus = typeof window !== 'undefined' && window.activeEdus ? window.activeEdus : new Set(allEdus);

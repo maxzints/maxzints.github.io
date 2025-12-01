@@ -45,7 +45,7 @@ loadData().then(data => {
     // 2. Define Filters
     const partyDomains = ["Democrat", "Republican", "Independent", "Other"];
     const activeParties = typeof window !== 'undefined' && window.activeParties ? window.activeParties : new Set(partyDomains);
-    const allIncomes = typeof window !== 'undefined' && window.allIncomes ? window.allIncomes : ['$30k - $50k', '$50k - $100k', '$100k - $150k', '$150k+', 'Unknown'];
+    const allIncomes = typeof window !== 'undefined' && window.allIncomes ? window.allIncomes : ['<$30k','$30k - $50k', '$50k - $100k', '$100k - $150k', '>$150k', 'Unknown'];
     const activeIncomes = typeof window !== 'undefined' && window.activeIncomes ? window.activeIncomes : new Set(allIncomes);
     const allEdusGlobal = typeof window !== 'undefined' && window.allEdus ? window.allEdus : allEdusFallback;
     const activeEdus = typeof window !== 'undefined' && window.activeEdus ? window.activeEdus : new Set(allEdusGlobal);
