@@ -31,12 +31,12 @@ function renderSankey(containerSelector = '#chart-sankey') {
       return;
     }
   
- const allIncomesFallback = ['<$30k', '$30k - $50k', '$50k - $100k', '$100k - $150k', '$>150k', 'Unknown'];
+ const allIncomesFallback = ['<$50k', '$50k - $100k', '$100k - $150k', '$>150k', ''];
   // Define local fallback for allIncomes (should be defined in index.html) 
   const allIncomesGlobal = typeof window !== 'undefined' && window.allIncomes ? window.allIncomes : allIncomesFallback;
   
   // DEFINE THE DESIRED INCOME ORDER (FORCED ORDERING)
-  const INCOME_ORDER = ['<$30k', '$30k - $50k', '$50k - $100k', '$100k - $150k', '$>150k', 'Unknown'];
+  const INCOME_ORDER = ['<$50k', '$50k - $100k', '$100k - $150k', '$>150k', ''];
   // Create a map for quick lookup of the desired index
   const INCOME_ORDER_MAP = new Map(INCOME_ORDER.map((name, i) => [name, i]));
 
