@@ -14,7 +14,7 @@ const processedCache = new Map();
 // Global state for the currently clicked respondent ID for highlighting
 window.highlightedID = null;
 
-d3.csv("ScrubbedRLSDataFileREDUCED.csv").then(function (rawData) {
+d3.csv("RLS_Final.csv").then(function (rawData) {
 
     const subsampledData = rawData.filter((d, i) => i % 3 === 0);
     window.rlsData = subsampledData; // Store the subsampled data globally  
