@@ -31,6 +31,7 @@ d3.csv("RLS_Final.csv").then(function (rawData) {
 const questionColumns = [
     { id: "CHNG_A", label: "A growing population of immigrants" },
     { id: "CHNG_B", label: "More women in the workforce" },
+    { id: "CHNG_A", label: "A growing population of immigrants" },
     { id: "SCIMPACT", label: "How has science impacted American society" }
 ];
 const Party_ID = "PARTY";
