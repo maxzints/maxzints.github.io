@@ -118,7 +118,7 @@ function renderSankey(containerSelector = '#chart-sankey') {
       if (typeof window !== 'undefined' && window.rlsData) {
           return Promise.resolve(window.rlsData); 
       }
-      return d3.csv('ScrubbedRLSDataFile.csv'); 
+      return d3.csv('RLS_Final.csv'); 
   };
     
   loadData().then(data => {
@@ -156,9 +156,9 @@ function renderSankey(containerSelector = '#chart-sankey') {
 
     // 5. Determine Opacity (Base Opacity logic remains the same for highlighting)
     const isHighlighting = typeof window !== 'undefined' && window.highlightedID !== null;
-    const GHOST_OPACITY = 0.1; 
+    const GHOST_OPACITY = 0.3; 
     const ACTIVE_OPACITY = 1.0; 
-    const HIGHLIGHT_GHOST_OPACITY = 0.2; // Opacity when a single respondent is highlighted
+    const HIGHLIGHT_GHOST_OPACITY = 0.3; // Opacity when a single respondent is highlighted
 
     // Helper to get color based on node type
     const getNodeColor = (d) => d.type === 'Income' ? INCOME_COLOR : colorScale(d.name);

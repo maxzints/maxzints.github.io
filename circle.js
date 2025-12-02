@@ -28,7 +28,7 @@ function renderCircle(containerSelector = '#chart-circle') {
     if (typeof window !== 'undefined' && window.rlsData) {
       return Promise.resolve(window.rlsData); // Use already loaded data immediately
     }
-    return d3.csv('ScrubbedRLSDataFile.csv'); // Fallback to async load
+    return d3.csv('RLS_Final.csv'); // Fallback to async load
   };
 
 loadData().then(data => {
@@ -76,8 +76,8 @@ loadData().then(data => {
 
     // 4. Opacity Logic
     const isHighlighting = typeof window !== 'undefined' && window.highlightedID !== null;
-    const HIGHLIGHT_GHOST_OPACITY = 0.2; 
-    const FILTER_GHOST_OPACITY = 0.1;
+    const HIGHLIGHT_GHOST_OPACITY = 0.3; 
+    const FILTER_GHOST_OPACITY = 0.3;
     const ACTIVE_OPACITY = 1.0; 
 
     //Check if a slice is active based on Party and Education filters
