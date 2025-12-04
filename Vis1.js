@@ -4,7 +4,7 @@
 const dimensions = {
     margin: { top: 50, right: 80, bottom: 40, left: 220 }
 }
-const radius = 1.75; // Radius of each mark (increased for better visibility)
+const radius = 1.5; // Radius of each mark (increased for better visibility)
 const PARTY_OFFSET_AMOUNT = 0.25; 
 
 const questionColumns = [
@@ -27,7 +27,7 @@ let isDataReady = false; // Flag to ensure rendering waits for data
 Promise.all([
     d3.csv("RLS_Final.csv"),
     // Attempt to load the pre-calculated positions CSV
-    d3.csv("settled_positions.csv").catch(error => {
+    d3.csv("settled_positions_demo.csv").catch(error => {
         console.warn("Could not load settled_positions.csv. Fast start will not be available.", error);
         return null; 
     }) 
@@ -53,7 +53,7 @@ Promise.all([
     }
 
     // 2. Prepare Raw Data
-    const subsampledData = rawData.filter((d, i) => i % 4 === 0);
+    const subsampledData = rawData.filter((d, i) => i % 5 === 0);
     window.rlsData = subsampledData; 
 
     // 3. Set Ready Flag
