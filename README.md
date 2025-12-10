@@ -9,4 +9,6 @@ After cleaning the dataset by removing any rows with null variables, we utilized
 
 Please feel free to click around any of the plots and try to find some trends. 
 
+Check out the Video Overview on youtube: https://youtu.be/9BX-JEH5OQY
+
 Thank you for your time! 
